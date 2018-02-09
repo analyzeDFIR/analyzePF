@@ -1,2 +1,2 @@
 # analyzePF
-Tools for analysis of Windows prefetch files
+Tool for analysis of Windows prefetch files
