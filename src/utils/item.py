@@ -122,7 +122,7 @@ class BaseItem(FieldBoundDict, metaclass=ItemMeta):
         '''
         return json_dumps({key:value for key,value in zip(keys, values)})
     @staticmethod
-    def _CSV_transform_to(keys, values, sep):
+    def _CSV_transform_to(keys, values, sep, *args, **kwargs):
         '''
         @BaseItem._transform_to
         '''
@@ -137,7 +137,7 @@ class BaseItem(FieldBoundDict, metaclass=ItemMeta):
             return cls(**{key:value for key,value in input_dict.items() if key in cls._FIELDS})
         return None
     @classmethod
-    def _CSV_transform_from(cls, input_csv, sep):
+    def _CSV_transform_from(cls, input_csv, sep, *args, **kwargs):
         '''
         @BaseItem._transform_from
         '''
@@ -165,11 +165,11 @@ class BaseItem(FieldBoundDict, metaclass=ItemMeta):
         '''
         return cls._transform_from(cls._JSON_transform_from, input_json)
     @classmethod
-    def from_CSV(cls, input_csv, sep=','):
+    def from_CSV(cls, input_csv, sep=',', *args, **kwargs):
         '''
         @BaseItem._transform_from
         '''
-        return cls._transform_from(cls._CSV_transform_from, input_csv, sep)
+        return cls._transform_from(cls._CSV_transform_from, input_csv, sep, *args, **kwargs)
 
     def _transform_to(self, transform, *args, **kwargs):
         '''
@@ -190,15 +190,15 @@ class BaseItem(FieldBoundDict, metaclass=ItemMeta):
         @BaseItem._transform_to
         '''
         return self._transform_to(self._JSON_transform_to)
-    def to_CSV(self, sep=','):
+    def to_CSV(self, sep=',', *args, **kwargs):
         '''
         @BaseItem._transform_to
         '''
-        return self._transform_to(self._CSV_transform_to, sep)
+        return self._transform_to(self._CSV_transform_to, sep, *args, **kwargs)
 
 class PrefetchItem(BaseItem):
     '''
-    Class for parsing Windows prefetch files
+    Represents single prefetch file
     '''
     header              = Field(1)
     file_info           = Field(2)
@@ -206,3 +206,5 @@ class PrefetchItem(BaseItem):
     trace_chains        = Field(4)
     filename_strings    = Field(5)
     volumes_info        = Field(6)
+    file_references     = Field(7)
+    directory_Strings   = Field(8)

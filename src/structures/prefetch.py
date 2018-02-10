@@ -13,7 +13,7 @@ PrefetchVersion = Enum(Int32ul, XP=0x11, SEVEN=0x17, EIGHT=0x1a, TEN=0x1e)
 
 PrefetchHeader = Struct(
     'Version'           / PrefetchVersion,
-    'Signature'         / Const(b'SCCA'),
+    'RawSignature'      / Const(b'SCCA'),
     Padding(4),
     'FileSize'          / Int32ul,
     'RawExecutableName' / String(60, encoding='utf16'),
@@ -32,12 +32,13 @@ PrefetchTraceChainEntry = Struct(
 PrefetchFileReferences = Struct(
     Padding(4),
     'ReferenceCount'        / Int32ul,
-    'References'            / Computed(Array(this.ReferenceCount, MFTFileReference))
+    'References'            / Array(this.ReferenceCount, MFTFileReference)
 )
 
 PrefetchDirectoryString = Struct(
     'Length'                / Int16ul,
-    'String'                / String(this.Length, encoding='utf16')
+    'RawString'             / If(this.Length > 0, String(this.Length*2, encoding=StringsAsBytes)),
+    Padding(2)
 )
 
 '''
@@ -73,7 +74,7 @@ PrefetchFileMetricsEntry17 = Struct(
 PrefetchVolumeInformation17 = Struct(
     'VolumeDevicePathOffset'    / Int32ul,
     'VolumeDevicePathLength'    / Int32ul,
-    'VolumeCreateTime'          / FILETIME,
+    'RawVolumeCreateTime'       / FILETIME,
     'VolumeSerialNumber'        / Int32ul,
     'SectionEOffset'            / Int32ul,
     'SectionELength'            / Int32ul,
@@ -112,7 +113,7 @@ PrefetchFileMetricsEntry23 = Struct(
 PrefetchVolumeInformation23 = Struct(
     'VolumeDevicePathOffset'    / Int32ul,
     'VolumeDevicePathLength'    / Int32ul,
-    'VolumeCreateTime'          / FILETIME,
+    'RawVolumeCreateTime'       / FILETIME,
     'VolumeSerialNumber'        / Int32ul,
     'SectionEOffset'            / Int32ul,
     'SectionELength'            / Int32ul,
@@ -149,7 +150,7 @@ PrefetchFileMetricsEntry30 = PrefetchFileMetricsEntry26
 PrefetchVolumeInformation30 = Struct(
     'VolumeDevicePathOffset'    / Int32ul,
     'VolumeDevicePathLength'    / Int32ul,
-    'VolumeCreateTime'          / FILETIME,
+    'RawVolumeCreateTime'       / FILETIME,
     'VolumeSerialNumber'        / Int32ul,
     'SectionEOffset'            / Int32ul,
     'SectionELength'            / Int32ul,
