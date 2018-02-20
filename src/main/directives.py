@@ -19,9 +19,11 @@ class DirectiveRegistry(RegistryMetaclassMixin, type):
         '''
         if cls.retrieve(name) is not None or name == 'BaseDirective':
             return False
+        if not hasattr(new_cls, '_KEY') or new_cls._KEY is None:
+            return False
         if not hasattr(new_cls, 'run_directive') or not callable(new_cls.run_directive):
             return False
-        cls._REGISTRY.update({name: new_cls})
+        cls._REGISTRY.update({new_cls._KEY: new_cls})
         return True
 
 class BaseDirective(object, metaclass=DirectiveRegistry):
@@ -32,5 +34,27 @@ class BaseDirective(object, metaclass=DirectiveRegistry):
     be referenced outside of this module unless type checking
     a directive class.
     '''
+    _KEY = None
+
     #TODO: implement directive base class
     pass
+
+class ParseCSVDirective(BaseDirective):
+    '''
+    '''
+    _KEY = 'PARSE_CSV'
+
+class ParseBODYDirective(BaseDirective):
+    '''
+    '''
+    _KEY = 'PARSE_BODY'
+
+class ParseJSONDirective(BaseDirective):
+    '''
+    '''
+    _KEY = 'PARSE_JSON'
+
+class ParseDBDirective(BaseDirective):
+    '''
+    '''
+    _KEY = 'PARSE_DB'

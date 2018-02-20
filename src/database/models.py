@@ -5,9 +5,12 @@
 
 from datetime import datetime
 from sqlalchemy.orm import relationship
+from sqlalchemy.types import String, Text, Integer, BigInteger
 from sqlalchemy import Column, ForeignKey, Index, text
 from sqlalchemy.schema import UniqueConstraint, DDL
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
+
+from src.utils.database import TimestampDefaultExpression, create_view 
 
 class BaseTableTemplate(object):
     '''
@@ -39,6 +42,8 @@ class BaseTableTemplate(object):
                 setattr(self, key, data_dict[key])
         return self
 
+BaseTable = declarative_base(cls=BaseTableTemplate)
+
 class ViewMixin(object):
     '''
     Mixin for (materialized) views
@@ -54,4 +59,93 @@ class ConcreteTableMixin(ViewMixin):
     id          = Column(BigInteger, primary_key=True)
     created_at  = Column(TIMESTAMP(timezone=True), server_default=TimestampDefaultExpression(), index=True)
 
-BaseTable = declarative_base(cls=BaseTableTemplate)
+class HeaderLinkedMixin(object):
+    '''
+    Mixin for tables linked to prefetch file header
+    '''
+    header_id               = Column(BigInteger, ForeignKey('header.id', ondelete='CASCADE', onupdate='CASCADE'), nullable=False, index=True)
+
+class Header(BaseTable, ConcreteTableMixin):
+    '''
+    Prefetch file header table
+    '''
+    version                 = Column(String().with_variant(Text, 'postgresql'), nullable=False, index=True)
+    file_size               = Column(BigInteger, nullable=False)
+    executable_name         = Column(String().with_variant(Text, 'postgresql'), nullable=False, index=True)
+    prefetch_hash           = Column(String().with_variant(Text, 'postgresql'), nullable=False, index=True)
+
+class FileInformation(BaseTable, ConcreteTableMixin, HeaderLinkedMixin):
+    '''
+    Prefetch file information table
+    '''
+    section_a_offset        = Column(Integer, nullable=False)
+    section_a_entries_count = Column(Integer, nullable=False)
+    section_b_offset        = Column(Integer, nullable=False)
+    section_b_entries_count = Column(Integer, nullable=False)
+    section_c_offset        = Column(Integer, nullable=False)
+    section_c_length        = Column(Integer, nullable=False)
+    section_d_offset        = Column(Integer, nullable=False)
+    section_d_entries_count = Column(Integer, nullable=False)
+    section_d_length        = Column(Integer, nullable=False)
+    execution_count         = Column(Integer, nullable=False)
+
+class LastExecutionTime(BaseTable, ConcreteTableMixin, HeaderLinkedMixin):
+    '''
+    Prefetch file last execution times from file information block
+    '''
+    file_info_id            = Column(BigInteger, ForeignKey('fileinformation.id', ondelete='CASCADE', onupdate='CASCADE'), nullable=False, index=True)
+    last_execution_time     = Column(TIMESTAMP(timezone=True), index=True)
+
+class FileMetrics(BaseTable, ConcreteTableMixin, HeaderLinkedMixin):
+    '''
+    Prefetch file metrics table
+    '''
+    start_time              = Column(Integer, nullable=False)
+    duration                = Column(Integer, nullable=False)
+    average_duration        = Column(Integer)
+    file_name_offset        = Column(BigInteger, nullable=False)
+    file_name_length        = Column(Integer, nullable=False)
+
+class FileMetricsNames(BaseTable, ConcreteTableMixin, HeaderLinkedMixin):
+    '''
+    Prefetch file metrics entry file name table
+    '''
+    file_metrics_id         = Column(BigInteger, ForeignKey('filemetrics.id', ondelete='CASCADE', onupdate='CASCADE'), nullable=False, index=True)
+    file_name               = Column(String().with_variant(Text, 'postgresql'))
+
+class TraceChains(BaseTable, ConcreteTableMixin, HeaderLinkedMixin):
+    ''''
+    Prefetch trace chains table
+    '''
+    next_entry_index        = Column(Integer, nullable=False)
+    sample_duration         = Column(Integer, nullable=False)
+    total_block_load_count  = Column(Integer, nullable=False)
+
+class VolumesInformation(BaseTable, ConcreteTableMixin, HeaderLinkedMixin):
+    '''
+    Prefetch file volume information table
+    '''
+    volume_device_path_offset   = Column(Integer, nullable=False)
+    volume_device_path_length   = Column(Integer, nullable=False)
+    volume_create_time          = Column(TIMESTAMP(timezone=True), index=True)
+    volume_serial_number        = Column(Integer)
+    section_e_offset            = Column(Integer, nullable=False)
+    section_e_length            = Column(Integer, nullable=False)
+    section_f_offset            = Column(Integer, nullable=False)
+    section_f_strings_count     = Column(Integer, nullable=False)
+
+class FileReferences(BaseTable, ConcreteTableMixin, HeaderLinkedMixin):
+    '''
+    Prefetch file references table
+    '''
+    file_metrics_id         = Column(BigInteger, ForeignKey('filemetrics.id', ondelete='CASCADE', onupdate='CASCADE'), nullable=True, index=True)
+    volume_info_id          = Column(BigInteger, ForeignKey('volumesinformation.id', ondelete='CASCADE', onupdate='CASCADE'), nullable=True, index=True)
+    segment_number          = Column(Integer, nullable=False)
+    sequence_number         = Column(Integer, nullable=False)
+
+class DirectoryStrings(BaseTable, ConcreteTableMixin, HeaderLinkedMixin):
+    '''
+    Prefetch file directory strings table
+    '''
+    length                  = Column(Integer)
+    string                  = Column(String().with_variant(Text, 'postgresql'), index=True)

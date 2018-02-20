@@ -9,12 +9,14 @@ from io import BytesIO
 from .decompress import DecompressWin10
 import src.structures.prefetch as pfstructs
 from src.utils.time import WindowsTime
+from src.utils.item import PrefetchItem
 
-class Prefetch(object):
+class Prefetch(PrefetchItem):
     '''
     Class for parsing Windows prefetch files
     '''
     def __init__(self, filepath, load=True):
+        super(Prefetch, self).__init__()
         self._stream = None
         self.filepath = filepath
         if load:
@@ -199,7 +201,9 @@ class Prefetch(object):
                 PrefetchFileMetricsEntry = pfstructs.PrefetchFileMetricsEntry30
             file_metrics = list()
             for i in range(file_info.get('SectionAEntriesCount')):
-                file_metrics.append(dict(**PrefetchFileMetricsEntry.parse_stream(stream)))
+                file_metrics_entry = dict(**PrefetchFileMetricsEntry.parse_stream(stream))
+                file_metrics_entry['NTFSFileReference'] = dict(file_metrics_entry['NTFSFileReference'])
+                file_metrics.append(file_metrics_entry)
             return file_metrics
         finally:
             stream.seek(original_position)
@@ -247,8 +251,8 @@ class Prefetch(object):
             self.header = self.parse_header()
             self.file_info = self.parse_file_info()
             self.file_metrics = self.parse_file_metrics()
-            self.trace_chains = self.parse_trace_chains()
             self.filename_strings = self.parse_filename_strings()
+            self.trace_chains = self.parse_trace_chains()
             self.volumes_info = self.parse_volumes_info()
             self.file_references = self.parse_file_references()
             self.directory_strings = self.parse_directory_strings()

@@ -6,6 +6,8 @@
 import os
 from argparse import ArgumentParser, ArgumentTypeError
 
+from src.main.directives import DirectiveRegistry
+
 def DBConnectConfig(arg):
     '''
     Args:
@@ -31,6 +33,10 @@ def initialize_parser():
     main_parser.add_argument('-V', '--version', action='version', version='%(prog)s v0.0.1')
     main_directives = main_parser.add_subparsers()
 
+    ## Base parent
+    base_parent = ArgumentParser(add_help=False)
+    base_parent.add_argument('-s', '--source', action='append', help='Path to input file(s)', dest='sources')
+
     ## Base output parent
     base_output_parent = ArgumentParser(add_help=False)
     base_output_parent.add_argument('-t', '--target', type=str, help='Path to output file', dest='target')
@@ -45,15 +51,20 @@ def initialize_parser():
 
     ## DB connect parent parser
     db_connect_parent = ArgumentParser(add_help=False)
-    db_connect_parent.add_argument('-d', '--driver', type=str, default='sqlite', help='Database driver to use (default: sqlite)', dest='driver')
-    db_connect_parent.add_argument('-c', '--connect', type=DBConnectConfig, help='Database connection string, or filepath to file containing connection string', dest='conn_string')
+    db_connect_parent.add_argument('-d', '--driver', type=str, default='sqlite', help='Database driver to use (default: sqlite)', dest='db_driver')
+    db_connect_parent.add_argument('-n', '--db', type=str, required=True, help='Name of database to connect to', dest='db_name')
+    db_connect_parent.add_argument('-c', '--connect', type=DBConnectConfig, help='Database connection string, or filepath to file containing connection string', dest='db_conn_string')
+    db_connect_parent.add_argument('-u', '--user', type=str, help='Name of database user (alternative to connection string)', dest='db_user')
+    db_connect_parent.add_argument('-p', '--passwd', type=str, help='Database user password (alternative to connection string)', dest='db_passwd')
+    db_connect_parent.add_argument('-H', '--host', type=str, default='localhost', help='Hostname or IP address of database (alternative to connection string)', dest='db_host')
+    db_connect_parent.add_argument('-P', '--port', type=str, help='Port database is listening on (alternative to connection string)', dest='db_host')
 
     ## Parse directives
     parse_directive = main_directives.add_parser('parse', help='prefetch file parser directives')
     parse_subdirectives = parse_directive.add_subparsers()
 
     # CSV parse directive
-    csv_parse_directive = parse_subdirectives.add_parser('csv', parents=[csv_output_parent], help='Parse prefetch file to csv')
+    csv_parse_directive = parse_subdirectives.add_parser('csv', parents=[base_parent, csv_output_parent], help='Parse prefetch file to csv')
     csv_parse_directive.add_argument('info_type', \
         type=str, \
         default='summary', \
@@ -61,29 +72,29 @@ def initialize_parser():
         help='Type of information to output')
     
     # Bodyfile parse directive
-    body_parse_directive = parse_subdirectives.add_parser('body', parents=[body_output_parent], help='Parse prefetch MAC times to bodyfile')
+    body_parse_directive = parse_subdirectives.add_parser('body', parents=[base_parent, body_output_parent], help='Parse prefetch MAC times to bodyfile')
 
     # JSON parse directive
-    json_parse_directive = parse_subdirectives.add_parser('json', parents=[base_output_parent], help='Parse prefetch file to JSON')
+    json_parse_directive = parse_subdirectives.add_parser('json', parents=[base_parent, base_output_parent], help='Parse prefetch file to JSON')
     json_parse_directive.add_argument('-p', '--pretty', action='store_true', help='Whether to pretty-print the JSON output', dest='pretty')
 
     # Database parse directive
-    db_parse_directive = parse_subdirectives.add_parser('db', help='Parse prefetch file to database')
+    db_parse_directive = parse_subdirectives.add_parser('db', parents=[base_parent, db_connect_parent], help='Parse prefetch file to database')
 
     ## Convert directives
     convert_directives = main_directives.add_parser('convert', help='Parsed prefetch file output conversion directives')
     convert_subdirectives = convert_directives.add_subparsers()
 
     # CSV conversion directive
-    csv_convert_directive = convert_subdirectives.add_parser('csv', help='Convert from CSV output')
+    csv_convert_directive = convert_subdirectives.add_parser('csv', parents=[base_parent], help='Convert from CSV output')
 
     # Body conversion directive
-    body_convert_directive = convert_subdirectives.add_parser('body', help='Convert from bodyfile output')
+    body_convert_directive = convert_subdirectives.add_parser('body', parents=[base_parent], help='Convert from bodyfile output')
     
     # JSON conversion directive
-    json_convert_directive = convert_subdirectives.add_parser('json', help='Convert from JSON output')
+    json_convert_directive = convert_subdirectives.add_parser('json', parents=[base_parent], help='Convert from JSON output')
 
     # DB conversion directive
-    db_convert_directive = convert_subdirectives.add_parser('db', help='Convert from database output')
+    db_convert_directive = convert_subdirectives.add_parser('db', parents=[base_parent], help='Convert from database output')
 
     return main_parser
