@@ -195,16 +195,3 @@ class BaseItem(FieldBoundDict, metaclass=ItemMeta):
         @BaseItem._transform_to
         '''
         return self._transform_to(self._CSV_transform_to, sep, *args, **kwargs)
-
-class PrefetchItem(BaseItem):
-    '''
-    Represents single prefetch file
-    '''
-    header              = Field(1)
-    file_info           = Field(2)
-    file_metrics        = Field(3)
-    trace_chains        = Field(4)
-    filename_strings    = Field(5)
-    volumes_info        = Field(6)
-    file_references     = Field(7)
-    directory_Strings   = Field(8)

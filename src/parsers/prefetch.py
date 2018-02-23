@@ -9,12 +9,21 @@ from io import BytesIO
 from .decompress import DecompressWin10
 import src.structures.prefetch as pfstructs
 from src.utils.time import WindowsTime
-from src.utils.item import PrefetchItem
+from src.utils.item import BaseItem, Field
 
-class Prefetch(PrefetchItem):
+class Prefetch(BaseItem):
     '''
     Class for parsing Windows prefetch files
     '''
+    header              = Field(1)
+    file_info           = Field(2)
+    file_metrics        = Field(3)
+    trace_chains        = Field(4)
+    filename_strings    = Field(5)
+    volumes_info        = Field(6)
+    file_references     = Field(7)
+    directory_Strings   = Field(8)
+
     def __init__(self, filepath, load=True):
         super(Prefetch, self).__init__()
         self._stream = None
