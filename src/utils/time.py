@@ -3,7 +3,7 @@
 # Noah Rubin
 # 02/05/2018
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 class WindowsTime(object):
     '''
@@ -44,9 +44,9 @@ class WindowsTime(object):
             N/A
         '''
         try:
-            return datetime.utcfromtimestamp(\
-                ( float(self._high) * 2 ** 32 + self._low ) * 1e-7 - 11644473600\
+            return datetime.fromtimestamp( \
+                ( float(self._high) * 2 ** 32 + self._low ) * 1e-7 - 11644473600, \
+                timezone.utc
             )
         except:
-            raise
             return None
