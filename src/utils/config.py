@@ -26,10 +26,10 @@ from os import path
 from datetime import datetime
 import logging
 
+from src.utils.logging import addProcessScopedHandler, ProcessAwareFileHandler
 from src.main.exceptions import PathInitializationError
 
 LOGGING_DEFAULTS = dict(\
-    prefix='amft_' + datetime.utcnow().strftime('%Y%m%d'),
     format='%(asctime)s\t%(levelname)s\t%(name)s\t%(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
     level=logging.INFO)
@@ -57,19 +57,31 @@ def initialize_paths():
         except Exception as e:
             raise PathInitializationException(e)
 
-def initialize_logger(log_path, log_prefix=LOGGING_DEFAULTS.get('prefix'), format=LOGGING_DEFAULTS.get('format'), datefmt=LOGGING_DEFAULTS.get('datefmt'), level=LOGGING_DEFAULTS.get('level')):
+def synthesize_log_path(log_path, log_prefix=None):
+    '''
+    '''
+    assert isinstance(log_path, str) and path.exists(log_path), 'Log_path is not a valid path'
+    assert isinstance(log_prefix, (type(None), str)), 'Log_prefix is not of type String'
+    if log_prefix is None:
+        log_prefix = 'amft_' + datetime.utcnow().strftime('%Y%m%d')
+    return path.join(path.abspath(log_path), log_prefix + '.log')
+
+def initialize_logger(log_path, log_prefix='main_tmp_amft', format=LOGGING_DEFAULTS.get('format'), datefmt=LOGGING_DEFAULTS.get('datefmt'), level=LOGGING_DEFAULTS.get('level')):
     '''
     Args:
         log_path: String    => valid path to output log to
-        log_prefix: String  => prefix of log file (default: pmft_<datetime>)
+        log_prefix: String  => prefix to log file
     Procedure:
         Initialize root logger with formatter, level, and handler set to 
         FileHandler at path (log_path + log_prefix.log)
     Preconditions:
         log_path is of type String
-        log_prefix is of type String
+        log_prefix is of type Sring
     '''
-    assert isinstance(log_path, str) and path.exists(log_path), 'Log_path is not a valid path'
-    assert isinstance(log_prefix, str), 'Log_prefix is not of type String'
-    full_log_path = path.join(path.abspath(log_path), log_prefix + '.log')
-    logging.basicConfig(filename=full_log_path, format=format, datefmt=datefmt, level=level)
+    full_log_path = synthesize_log_path(log_path, log_prefix)
+    if len(logging.root.handlers) == 0:
+        handlers = list()
+        handlers.append(ProcessAwareFileHandler(full_log_path))
+        logging.basicConfig(format=format, datefmt=datefmt, level=level, handlers=handlers)
+    else:
+        addProcessScopedHandler(full_log_path)
