@@ -1,7 +1,25 @@
-# -*- coding: UTF-8 -*-
-# prefetch.py
-# Noah Rubin
-# 02/08/2017
+## -*- coding: UTF-8 -*-
+## prefetch.py
+##
+## Copyright (c) 2018 Noah Rubin
+## 
+## Permission is hereby granted, free of charge, to any person obtaining a copy
+## of this software and associated documentation files (the "Software"), to deal
+## in the Software without restriction, including without limitation the rights
+## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+## copies of the Software, and to permit persons to whom the Software is
+## furnished to do so, subject to the following conditions:
+## 
+## The above copyright notice and this permission notice shall be included in all
+## copies or substantial portions of the Software.
+## 
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+## IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+## FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+## AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+## LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+## OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+## SOFTWARE.
 
 from datetime import datetime
 from io import BytesIO
@@ -71,8 +89,7 @@ class Prefetch(BaseItem):
             for i in range(volume_info.get('SectionFStringsCount')):
                 try:
                     directory_string_struct = pfstructs.PrefetchDirectoryString.parse_stream(stream)
-                    if directory_string_struct.RawString is not None:
-                        directory_string_struct.String = directory_string_struct.RawString.replace(b'\x00', b'')
+                    directory_string_struct.String = stream.read(directory_string_struct.Length * 2 + 2)
                     directory_strings.append({\
                         'Length': directory_string_struct.Length,\
                         'String': directory_string_struct.String,\

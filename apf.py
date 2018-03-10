@@ -4,8 +4,8 @@
 # Noah Rubin
 # 02/08/2018
 
-import sys
+from sys import exit
 from src.main.app import apf_main
 
 if __name__ == '__main__':
-    sys.exit(apf_main())
+    exit(apf_main())
