@@ -23,6 +23,7 @@
 
 from datetime import datetime
 from io import BytesIO
+from construct.lib import Container
 
 from .decompress import DecompressWin10
 import src.structures.prefetch as pfstructs
@@ -42,7 +43,7 @@ class Prefetch(BaseItem):
     file_references     = Field(7)
     directory_Strings   = Field(8)
 
-    def __init__(self, filepath, load=True):
+    def __init__(self, filepath, load=False):
         super(Prefetch, self).__init__()
         self._stream = None
         self.filepath = filepath
@@ -63,6 +64,19 @@ class Prefetch(BaseItem):
             except:
                 version = None
         return version
+    def _clean_transform(self, value):
+        '''
+        '''
+        if issubclass(type(value), Container):
+            cleaned_value = Container(value)
+            for key in cleaned_value.keys():
+                if key.startswith('Raw'):
+                    del cleaned_value[key]
+                else:
+                    cleaned_value[key] = self._clean_transform(cleaned_value[key])
+            return cleaned_value
+        else:
+            return value
     def get_stream(self, persist=False):
         '''
         '''
@@ -90,10 +104,10 @@ class Prefetch(BaseItem):
                 try:
                     directory_string_struct = pfstructs.PrefetchDirectoryString.parse_stream(stream)
                     directory_string_struct.String = stream.read(directory_string_struct.Length * 2 + 2)
-                    directory_strings.append({\
-                        'Length': directory_string_struct.Length,\
-                        'String': directory_string_struct.String,\
-                        }\
+                    directory_strings.append(Container(\
+                        Length=directory_string_struct.Length,
+                        String=directory_string_struct.String\
+                        )\
                     )
                 except:
                     directory_strings.append(None)
@@ -113,7 +127,7 @@ class Prefetch(BaseItem):
         try:
             stream.seek(0)
             stream.seek(volume_info.get('SectionEOffset'))
-            file_refs = dict(**pfstructs.PrefetchFileReferences.parse_stream(stream))
+            file_refs = self._clean_transform(pfstructs.PrefetchFileReferences.parse_stream(stream))
             file_refs['References'] = list(map(lambda ref: dict(**ref), file_refs['References']))
             return file_refs
         finally:
@@ -150,7 +164,7 @@ class Prefetch(BaseItem):
                     encoding='utf8').parse(\
                         stream.read(volume_info.VolumeDevicePathLength*2).replace(b'\x00', b'')\
                     )
-            return {key:value for key,value in volume_info.items() if not key.startswith('Raw')}
+            return self._clean_transform(volume_info)
         finally:
             stream.seek(original_position)
     def parse_filename_strings(self, stream=None, header=None, file_info=None, file_metrics=None):
@@ -198,7 +212,7 @@ class Prefetch(BaseItem):
             stream.seek(file_info.get('SectionBOffset'))
             trace_chains = list()
             for i in range(file_info.get('SectionBEntriesCount')):
-                trace_chains.append(dict(**pfstructs.PrefetchTraceChainEntry.parse_stream(stream)))
+                trace_chains.append(self._clean_transform(pfstructs.PrefetchTraceChainEntry.parse_stream(stream)))
             return trace_chains
         finally:
             stream.seek(original_position)
@@ -227,8 +241,9 @@ class Prefetch(BaseItem):
                 PrefetchFileMetricsEntry = pfstructs.PrefetchFileMetricsEntry30
             file_metrics = list()
             for i in range(file_info.get('SectionAEntriesCount')):
-                file_metrics_entry = dict(**PrefetchFileMetricsEntry.parse_stream(stream))
-                file_metrics_entry['NTFSFileReference'] = dict(file_metrics_entry['NTFSFileReference'])
+                file_metrics_entry = self._clean_transform(PrefetchFileMetricsEntry.parse_stream(stream))
+                if hasattr(file_metrics_entry, 'NTFSFileReference'):
+                    file_metrics_entry.NTFSFileReference = self._clean_transform(file_metrics_entry.NTFSFileReference)
                 file_metrics.append(file_metrics_entry)
             return file_metrics
         finally:
@@ -250,7 +265,7 @@ class Prefetch(BaseItem):
             PrefetchFileInformation = pfstructs.PrefetchFileInformation30
         file_info =  PrefetchFileInformation.parse_stream(stream)
         file_info.LastExecutionTime = list(map(lambda ft: WindowsTime(ft).parse(), file_info.RawLastExecutionTime))
-        return {key:value for key,value in file_info.items() if not key.startswith('Raw')}
+        return self._clean_transform(file_info)
     def parse_header(self, stream=None):
         '''
         '''
@@ -260,7 +275,7 @@ class Prefetch(BaseItem):
         header.Signature = header.RawSignature.decode('utf8')
         header.ExecutableName = header.RawExecutableName.split('\x00')[0]
         header.PrefetchHash = hex(header.RawPrefetchHash).replace('0x', '').upper()
-        return {key:value for key,value in header.items() if not key.startswith('Raw')}
+        return self._clean_transform(header)
     def parse(self):
         '''
         Args:

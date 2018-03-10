@@ -159,7 +159,7 @@ class BaseParseFileOutputDirective(BaseDirective):
         target_parent = path.dirname(args.target)
         frontier = cls.get_frontier(args.sources)
         frontier_count = len(frontier)
-        if frontier_count > 0 and args.count > 0 and cls._TASK_CLASS is not None:
+        if frontier_count > 0 and cls._TASK_CLASS is not None:
             worker_pool = parallel.WorkerPool(\
                 parallel.JoinableQueue(-1), 
                 cls._TASK_CLASS, 
@@ -169,32 +169,17 @@ class BaseParseFileOutputDirective(BaseDirective):
                 task_kwargs=cls._get_task_kwargs(args, target_parent)\
             )
             worker_pool.start()
-            record_count = 0
-            track_by_records = args.count == sys.maxsize
-            with tqdm(total=frontier_count if track_by_records else args.count, desc='Total', unit='files' if track_by_records else 'records') as node_progress:
+            with tqdm(total=frontier_count, desc='Total', unit='files') as node_progress:
                 for nodeidx, node in enumerate(frontier):
                     Logger.info('Parsing $MFT file %s (node %d)'%(node, nodeidx))
-                    mft_file = open(node, 'rb')
+                    prefetch_file = open(node, 'rb')
                     try:
-                        recordidx = 0
-                        remaining_count = cls._get_remaining_count(node, record_count, args.count)
-                        if remaining_count > 0:
-                            with tqdm(total=remaining_count, desc='%d. %s'%(nodeidx, path.basename(node)), unit='records') as record_progress:
-                                mft_record = mft_file.read(cls.MFT_RECORD_SIZE)
-                                while mft_record != '' and remaining_count > 0:
-                                    worker_pool.add_task(nodeidx, recordidx, mft_record)
-                                    mft_record = mft_file.read(cls.MFT_RECORD_SIZE)
-                                    recordidx += 1
-                                    remaining_count -= 1
-                                    record_progress.update(1)
+                        worker_pool.add_task(nodeidx, node)
                     finally:
-                        record_count += (recordidx + 1)
-                        mft_file.close()
-                    worker_pool.join_tasks()
-                    node_progress.update(1 if args.count == sys.maxsize else recordidx)
-                    if record_count >= args.count:
-                        break
+                        prefetch_file.close()
+                        node_progress.update(1)
             worker_pool.add_poison_pills()
+            worker_pool.join_tasks()
             worker_pool.join_workers()
             worker_pool.terminate()
             parallel.coalesce_files(path.join(target_parent, '*_tmp_amft.out'), args.target)

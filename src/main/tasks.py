@@ -34,15 +34,14 @@ class BaseParseTask(object):
     '''
     NULL = None
 
-    def __init__(self, nodeidx, recordidx, mft_record, **kwargs):
+    def __init__(self, nodeidx, filepath, **kwargs):
         self.nodeidx = nodeidx
-        self.recordidx = recordidx
-        self.mft_record = mft_record
+        self.filepath = filepath
         for kwarg in kwargs:
             setattr(self, kwarg, kwargs[kwarg])
     def __call__(self, worker_name):
-        mft_entry = MFTEntry(self.mft_record)
-        result_set = self._get_resultset(mft_entry)
+        pf = Prefetch(self.filepath)
+        result_set = self._get_resultset(pf)
         self._handle_resultset(result_set, worker_name)
 
 class BaseParseFileOutputTask(BaseParseTask):
@@ -68,7 +67,16 @@ class BaseParseFileOutputTask(BaseParseTask):
 class ParseCSVTask(BaseParseFileOutputTask):
     '''
     '''
-    pass
+    def _get_resultset(self, pf):
+        result_set = list()
+        if self.info_type == 'summary':
+            try:
+                pf.parse()
+            except Exception as e:
+                Logger.error('Failed to parse Prefetch file %s (%s)'%(self.filepath, str(e)))
+            else:
+                result = list()
+                result_set.append(result)
 
 class ParseBODYTask(BaseParseFileOutputTask):
     '''
