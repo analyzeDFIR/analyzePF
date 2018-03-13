@@ -25,6 +25,7 @@ import logging
 Logger = logging.getLogger(__name__)
 import sys
 from os import path, stat
+from glob import glob
 from argparse import Namespace
 from time import sleep
 from tqdm import tqdm
@@ -171,7 +172,7 @@ class BaseParseFileOutputDirective(BaseDirective):
             worker_pool.start()
             with tqdm(total=frontier_count, desc='Total', unit='files') as node_progress:
                 for nodeidx, node in enumerate(frontier):
-                    Logger.info('Parsing $MFT file %s (node %d)'%(node, nodeidx))
+                    Logger.info('Parsing prefetch file %s (node %d)'%(node, nodeidx))
                     prefetch_file = open(node, 'rb')
                     try:
                         worker_pool.add_task(nodeidx, node)
@@ -184,10 +185,43 @@ class BaseParseFileOutputDirective(BaseDirective):
             worker_pool.terminate()
             parallel.coalesce_files(path.join(target_parent, '*_tmp_amft.out'), args.target)
 
-class ParseCSVDirective(BaseDirective):
+class ParseCSVDirective(BaseParseFileOutputDirective):
     '''
     '''
     _TASK_CLASS = tasks.ParseCSVTask
+
+    @classmethod
+    def _get_task_kwargs(cls, args, target_parent):
+        '''
+        @BaseParseFileOutputDirective._get_task_kwargs
+        '''
+        return dict(info_type=args.info_type, target=target_parent, sep=args.sep)
+    @classmethod
+    def _get_worker_kwargs(cls, args):
+        '''
+        @BaseParseFileOutputDirective._get_worker_kwargs
+        '''
+        return dict(log_path=args.log_path)
+    @classmethod
+    def run(cls, args):
+        '''
+        Args:
+            @BaseDirective.run_directive
+            args.info_type: String      => type of information to extract
+            args.sources: List<String>  => list of $MFT file(s) to parse
+            args.target: String         => path to output file
+            args.sep: String            => separator to use in output file
+        Procedure:
+            Parse $MFT information to CSV format
+        Preconditions:
+            @BaseDirective.run_directive
+            args.info_type is of type String        (assumed True)
+            args.sources is of type List<String>    (assumed True)
+            args.target is of type String           (assumed True)
+            args.target points to existing directory
+            args.sep is of type String              (assumed True)
+        '''
+        super(ParseCSVDirective, cls).run(args)
 
 class ParseBODYDirective(BaseDirective):
     '''

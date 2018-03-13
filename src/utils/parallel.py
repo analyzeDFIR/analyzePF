@@ -23,7 +23,7 @@
 
 import logging
 Logger = logging.getLogger(__name__)
-from os import remove, rename
+import os
 from uuid import uuid4
 from multiprocessing import Process, JoinableQueue, cpu_count
 from glob import glob
@@ -53,8 +53,8 @@ def coalesce_files(glob_pattern, target, transform=lambda line: line, clean=True
     file_list = glob(glob_pattern)
     if len(file_list) == 0:
         return
-    elif len(file_list) == 1:
-        rename(file_list[0], target)
+    elif len(file_list) == 1 and not os.path.exists(file_list[0]):
+        os.rename(file_list[0], target)
     else:
         handle_list = [open(filepath, 'r') for filepath in file_list]
         merged_records = heapq_merge(*[(transform(line) for line in handle) for handle in handle_list])
@@ -67,7 +67,7 @@ def coalesce_files(glob_pattern, target, transform=lambda line: line, clean=True
                 handle.close()
             if clean:
                 for path in file_list:
-                    remove(path)
+                    os.remove(path)
 
 class QueueWorker(Process):
     '''

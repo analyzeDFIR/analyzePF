@@ -75,8 +75,37 @@ class ParseCSVTask(BaseParseFileOutputTask):
             except Exception as e:
                 Logger.error('Failed to parse Prefetch file %s (%s)'%(self.filepath, str(e)))
             else:
-                result = list()
-                result_set.append(result)
+                # FIELDS: Version Signature ExecutableName PrefetchHash
+                #         SectionAEntriesCount SectionBEntriesCount SectionCLength SectionDEntriesCount
+                #         LastExecutionTime ExecutionCount FileNameStrings
+                #         VolumeDevicePath VolumeCreateTime VolumeSerialNumber
+                #         FileMetricsCount TraceChainsAccount FileReferenceCount DirectoryStringCount 
+                try:
+                    result = list()
+                    result.append(str(self.nodeidx))
+                    result.append(str(pf.header.Version))
+                    result.append(str(pf.header.Signature))
+                    result.append(str(pf.header.ExecutableName if hasattr(pf.header, 'ExecutableName') else self.NULL))
+                    result.append(str(pf.header.PrefetchHash if hasattr(pf.header, 'PrefetchHash') else self.NULL))
+                    result.append(str(pf.file_info.SectionAEntriesCount))
+                    result.append(str(pf.file_info.SectionBEntriesCount))
+                    result.append(str(pf.file_info.SectionCLength))
+                    result.append(str(pf.file_info.SectionDEntriesCount))
+                    result.append(pf.file_info.LastExecutionTime[0].strftime('%Y-%m-%d %H:%M:%S.%f%z') \
+                        if len(pf.file_info.LastExecutionTime) > 0 and pf.file_info.LastExecutionTime[0] is not None \
+                        else self.NULL)
+                    result.append(str(pf.file_info.ExecutionCount))
+                    result.append('|'.join(str(fstring) for fstring in pf.filename_strings))
+                    result.append(pf.volumes_info.VolumeDevicePath if hasattr(pf.volumes_info, 'VolumeDevicePath') else self.NULL)
+                    result.append(pf.volumes_info.VolumeCreateTime.strftime('%Y-%m-%d %H:%M:%S.%f%z'))
+                    result.append(str(pf.volumes_info.VolumeSerialNumber))
+                    for attribute_key in ['file_metrics', 'trace_chains', 'file_references', 'directory_strings']:
+                        attribute = getattr(pf, attribute_key)
+                        result.append(str(len(attribute)) if attribute is not None else self.NULL)
+                    result_set.append(result)
+                except Exception as e:
+                    Logger.error('Failed to create CSV output record (%s)'%str(e))
+        return result_set
 
 class ParseBODYTask(BaseParseFileOutputTask):
     '''
