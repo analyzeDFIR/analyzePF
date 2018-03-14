@@ -23,9 +23,11 @@
 
 import logging
 Logger = logging.getLogger(__name__)
-from os import path
+from os import path, stat
+from datetime import datetime, timezone, timedelta
 from json import dumps
 from construct import Container
+from tqdm import tqdm
 
 from src.parsers.prefetch import Prefetch
 
@@ -43,6 +45,7 @@ class BaseParseTask(object):
         pf = Prefetch(self.filepath)
         result_set = self._get_resultset(pf)
         self._handle_resultset(result_set, worker_name)
+        return True
 
 class BaseParseFileOutputTask(BaseParseTask):
     '''
@@ -58,7 +61,10 @@ class BaseParseFileOutputTask(BaseParseTask):
                 with open(target_file, 'a') as f:
                     for result in result_set:
                         try:
-                            f.write(self.sep.join(result) + '\n')
+                            if hasattr(self, 'sep'):
+                                f.write(self.sep.join(result) + '\n')
+                            else:
+                                f.write(result + '\n')
                         except Exception as e:
                             Logger.error('Failed to write %s to output file %s (%s)'%(str(result), target_file, str(e)))
         except Exception as e:
@@ -68,6 +74,8 @@ class ParseCSVTask(BaseParseFileOutputTask):
     '''
     '''
     def _get_resultset(self, pf):
+        '''
+        '''
         result_set = list()
         if self.info_type == 'summary':
             try:
@@ -81,24 +89,25 @@ class ParseCSVTask(BaseParseFileOutputTask):
                 #         VolumeDevicePath VolumeCreateTime VolumeSerialNumber
                 #         FileMetricsCount TraceChainsAccount FileReferenceCount DirectoryStringCount 
                 try:
-                    result = list()
-                    result.append(str(self.nodeidx))
-                    result.append(str(pf.header.Version))
-                    result.append(str(pf.header.Signature))
-                    result.append(str(pf.header.ExecutableName if hasattr(pf.header, 'ExecutableName') else self.NULL))
-                    result.append(str(pf.header.PrefetchHash if hasattr(pf.header, 'PrefetchHash') else self.NULL))
-                    result.append(str(pf.file_info.SectionAEntriesCount))
-                    result.append(str(pf.file_info.SectionBEntriesCount))
-                    result.append(str(pf.file_info.SectionCLength))
-                    result.append(str(pf.file_info.SectionDEntriesCount))
-                    result.append(pf.file_info.LastExecutionTime[0].strftime('%Y-%m-%d %H:%M:%S.%f%z') \
-                        if len(pf.file_info.LastExecutionTime) > 0 and pf.file_info.LastExecutionTime[0] is not None \
-                        else self.NULL)
-                    result.append(str(pf.file_info.ExecutionCount))
-                    result.append('|'.join(str(fstring) for fstring in pf.filename_strings))
-                    result.append(pf.volumes_info.VolumeDevicePath if hasattr(pf.volumes_info, 'VolumeDevicePath') else self.NULL)
-                    result.append(pf.volumes_info.VolumeCreateTime.strftime('%Y-%m-%d %H:%M:%S.%f%z'))
-                    result.append(str(pf.volumes_info.VolumeSerialNumber))
+                    result = [\
+                        str(self.nodeidx),
+                        str(pf.header.Version),
+                        str(pf.header.Signature),
+                        str(pf.header.ExecutableName if hasattr(pf.header, 'ExecutableName') else self.NULL),
+                        str(pf.header.PrefetchHash if hasattr(pf.header, 'PrefetchHash') else self.NULL),
+                        str(pf.file_info.SectionAEntriesCount),
+                        str(pf.file_info.SectionBEntriesCount),
+                        str(pf.file_info.SectionCLength),
+                        str(pf.file_info.SectionDEntriesCount),
+                        pf.file_info.LastExecutionTime[0].strftime('%Y-%m-%d %H:%M:%S.%f%z') \
+                            if len(pf.file_info.LastExecutionTime) > 0 and pf.file_info.LastExecutionTime[0] is not None \
+                            else self.NULL,
+                        str(pf.file_info.ExecutionCount),
+                        '|'.join(str(fstring) for fstring in pf.filename_strings),
+                        pf.volumes_info.VolumeDevicePath if hasattr(pf.volumes_info, 'VolumeDevicePath') else self.NULL,
+                        pf.volumes_info.VolumeCreateTime.strftime('%Y-%m-%d %H:%M:%S.%f%z'),
+                        str(pf.volumes_info.VolumeSerialNumber)\
+                    ]
                     for attribute_key in ['file_metrics', 'trace_chains', 'file_references', 'directory_strings']:
                         attribute = getattr(pf, attribute_key)
                         result.append(str(len(attribute)) if attribute is not None else self.NULL)
@@ -110,9 +119,73 @@ class ParseCSVTask(BaseParseFileOutputTask):
 class ParseBODYTask(BaseParseFileOutputTask):
     '''
     '''
-    pass
+    @staticmethod
+    def to_timestamp(dt):
+        '''
+        Args:
+            dt: DateTime<UTC>   => datetime object to convert
+        Returns:
+            Datetime object converted to Unix epoch time
+        Preconditions:
+            dt is timezone-aware timestamp with timezone UTC
+        '''
+        return (dt - datetime(1970,1,1, tzinfo=timezone.utc)) / timedelta(seconds=1)
+
+    def _get_resultset(self, pf):
+        '''
+        '''
+        result_set = list()
+        try:
+            pf.parse()
+        except Exception as e:
+            Logger.error('Failed to parse Prefetch file %s (%s)'%(self.filepath, str(e)))
+        else:
+            # FIELDS: nodeidx|recordidx|MD5|name|inode|mode_as_string|UID|GID|size|atime|mtime|ctime|crtime
+            try:
+                if len(pf.file_info.LastExecutionTime) > 0:
+                    file_path = path.basename(self.filepath)
+                    file_size = stat(self.filepath).st_size
+                    for execution_time in pf.file_info.LastExecutionTime:
+                        if execution_time.year != 1601:
+                            result = [\
+                                str(self.nodeidx),
+                                self.NULL,
+                                self.NULL,
+                                file_path,
+                                self.NULL,
+                                self.NULL,
+                                self.NULL,
+                                'LET',
+                                str(file_size),
+                                str(self.to_timestamp(execution_time)),
+                                self.NULL,
+                                self.NULL,
+                                self.NULL\
+                            ]
+                            result_set.append(result)
+            except Exception as e:
+                Logger.error('Failed to create BODY output record (%s)'%str(e))
+        return result_set
 
 class ParseJSONTask(BaseParseFileOutputTask):
     '''
     '''
-    pass
+    def _get_resultset(self, pf):
+        '''
+        '''
+        result_set = list()
+        try:
+            pf.parse()
+            for idx in range(len(pf.file_info.LastExecutionTime)):
+                pf.file_info.LastExecutionTime[idx] = pf.file_info.LastExecutionTime[idx].strftime('%Y-%m-%d %H:%M:%S.%f%z')
+            pf.volumes_info.VolumeCreateTime = pf.volumes_info.VolumeCreateTime.strftime('%Y-%m-%d %H:%M:%S.%f%z')
+            serializable_entry = Container(**pf)
+            result = dumps(serializable_entry, sort_keys=True, indent=(2 if self.pretty else None))
+        except Exception as e:
+            Logger.error('Failed to parse Prefetch file %s (%s)'%(self.filepath, str(e)))
+        else:
+            try:
+                result_set.append(result)
+            except Exception as e:
+                Logger.error('Failed to create JSON output record (%s)'%str(e))
+        return result_set

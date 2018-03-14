@@ -30,7 +30,7 @@ from src.utils.logging import addProcessScopedHandler, ProcessAwareFileHandler
 from src.main.exceptions import PathInitializationError
 
 LOGGING_DEFAULTS = dict(\
-    format='%(asctime)s\t%(levelname)s\t%(name)s\t%(message)s',
+    format='%(asctime)s.%(msecs)s\t%(levelname)s\t%(name)s\t%(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
     level=logging.INFO)
 

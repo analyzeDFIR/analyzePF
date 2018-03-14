@@ -141,7 +141,7 @@ class BaseParseFileOutputDirective(BaseDirective):
         remaining_count = max_records - record_count
         return file_records if file_records <= remaining_count else remaining_count
     @classmethod
-    def _get_task_kwargs(cls, args, target_parent):
+    def _get_task_kwargs(cls, args):
         '''
         '''
         raise NotImplementedError('_get_worker_kwargs not implemented for %s'%cls.__name__)
@@ -157,33 +157,47 @@ class BaseParseFileOutputDirective(BaseDirective):
         '''
         assert path.isdir(path.dirname(args.target)), 'Target does not point to existing directory'
         args.target = path.abspath(args.target)
-        target_parent = path.dirname(args.target)
+        args.target_parent = path.dirname(args.target)
         frontier = cls.get_frontier(args.sources)
         frontier_count = len(frontier)
         if frontier_count > 0 and cls._TASK_CLASS is not None:
+            tqdm.set_lock(parallel.RLock())
+            progress_pool = parallel.WorkerPool(\
+                parallel.JoinableQueue(-1), 
+                None,
+                worker_class=parallel.ProgressTrackerWorker,
+                worker_count=1,
+                worker_kwargs=dict(\
+                    pcount=frontier_count,
+                    pdesc='Total',
+                    punit='files'\
+                )\
+            )
+            args.result_queue = progress_pool.queue
             worker_pool = parallel.WorkerPool(\
                 parallel.JoinableQueue(-1), 
                 cls._TASK_CLASS, 
                 daemonize=False, 
                 worker_count=args.threads,
                 worker_kwargs=cls._get_worker_kwargs(args),
-                task_kwargs=cls._get_task_kwargs(args, target_parent)\
+                task_kwargs=cls._get_task_kwargs(args)\
             )
+            progress_pool.start()
             worker_pool.start()
-            with tqdm(total=frontier_count, desc='Total', unit='files') as node_progress:
-                for nodeidx, node in enumerate(frontier):
-                    Logger.info('Parsing prefetch file %s (node %d)'%(node, nodeidx))
-                    prefetch_file = open(node, 'rb')
-                    try:
-                        worker_pool.add_task(nodeidx, node)
-                    finally:
-                        prefetch_file.close()
-                        node_progress.update(1)
-            worker_pool.add_poison_pills()
+            for nodeidx, node in enumerate(frontier):
+                Logger.info('Parsing prefetch file %s (node %d)'%(node, nodeidx))
+                prefetch_file = open(node, 'rb')
+                try:
+                    worker_pool.add_task(nodeidx, node)
+                finally:
+                    prefetch_file.close()
             worker_pool.join_tasks()
+            progress_pool.join_tasks()
+            progress_pool.add_poison_pills()
+            progress_pool.join_workers()
+            worker_pool.add_poison_pills()
             worker_pool.join_workers()
-            worker_pool.terminate()
-            parallel.coalesce_files(path.join(target_parent, '*_tmp_amft.out'), args.target)
+            parallel.coalesce_files(path.join(args.target_parent, '*_tmp_amft.out'), args.target)
 
 class ParseCSVDirective(BaseParseFileOutputDirective):
     '''
@@ -191,17 +205,17 @@ class ParseCSVDirective(BaseParseFileOutputDirective):
     _TASK_CLASS = tasks.ParseCSVTask
 
     @classmethod
-    def _get_task_kwargs(cls, args, target_parent):
+    def _get_task_kwargs(cls, args):
         '''
         @BaseParseFileOutputDirective._get_task_kwargs
         '''
-        return dict(info_type=args.info_type, target=target_parent, sep=args.sep)
+        return dict(info_type=args.info_type, target=args.target_parent, sep=args.sep)
     @classmethod
     def _get_worker_kwargs(cls, args):
         '''
         @BaseParseFileOutputDirective._get_worker_kwargs
         '''
-        return dict(log_path=args.log_path)
+        return dict(result_queue=args.result_queue, log_path=args.log_path)
     @classmethod
     def run(cls, args):
         '''
@@ -223,15 +237,77 @@ class ParseCSVDirective(BaseParseFileOutputDirective):
         '''
         super(ParseCSVDirective, cls).run(args)
 
-class ParseBODYDirective(BaseDirective):
+class ParseBODYDirective(BaseParseFileOutputDirective):
     '''
     '''
     _TASK_CLASS = tasks.ParseBODYTask
 
-class ParseJSONDirective(BaseDirective):
+    @classmethod
+    def _get_task_kwargs(cls, args):
+        '''
+        @BaseParseFileOutputDirective._get_task_kwargs
+        '''
+        return dict(target=args.target_parent, sep=args.sep)
+    @classmethod
+    def _get_worker_kwargs(cls, args):
+        '''
+        @BaseParseFileOutputDirective._get_worker_kwargs
+        '''
+        return dict(result_queue=args.result_queue, log_path=args.log_path)
+    @classmethod
+    def run(cls, args):
+        '''
+        Args:
+            @BaseDirective.run_directive
+            args.sources: List<String>  => list of $MFT file(s) to parse
+            args.target: String         => path to output file
+            args.sep: String            => separator to use in output file
+        Procedure:
+            Parse $MFT information to CSV format
+        Preconditions:
+            @BaseDirective.run_directive
+            args.sources is of type List<String>    (assumed True)
+            args.target is of type String           (assumed True)
+            args.target points to existing directory
+            args.sep is of type String              (assumed True)
+        '''
+        super(ParseBODYDirective, cls).run(args)
+
+class ParseJSONDirective(BaseParseFileOutputDirective):
     '''
     '''
     _TASK_CLASS = tasks.ParseJSONTask
+
+    @classmethod
+    def _get_task_kwargs(cls, args):
+        '''
+        @BaseParseFileOutputDirective._get_task_kwargs
+        '''
+        return dict(target=args.target_parent, pretty=args.pretty if args.threads == 1 else False)
+    @classmethod
+    def _get_worker_kwargs(cls, args):
+        '''
+        @BaseParseFileOutputDirective._get_worker_kwargs
+        '''
+        return dict(result_queue=args.result_queue, log_path=args.log_path)
+    @classmethod
+    def run(cls, args):
+        '''
+        Args:
+            @BaseDirective.run_directive
+            args.sources: List<String>  => list of $MFT file(s) to parse
+            args.target: String         => path to output file
+            args.pretty                 => whether to pretty print JSON output
+        Procedure:
+            Parse $MFT information to CSV format
+        Preconditions:
+            @BaseDirective.run_directive
+            args.sources is of type List<String>    (assumed True)
+            args.target is of type String           (assumed True)
+            args.target points to existing directory
+            args.pretty is of type Boolean          (assumed True)
+        '''
+        super(ParseJSONDirective, cls).run(args)
 
 class ParseDBDirective(BaseDirective):
     '''

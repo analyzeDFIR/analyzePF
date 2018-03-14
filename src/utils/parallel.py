@@ -25,9 +25,10 @@ import logging
 Logger = logging.getLogger(__name__)
 import os
 from uuid import uuid4
-from multiprocessing import Process, JoinableQueue, cpu_count
+from multiprocessing import Process, JoinableQueue, RLock, cpu_count
 from glob import glob
 from heapq import merge as heapq_merge
+from tqdm import tqdm
 
 from src.utils.config import initialize_logger
 
@@ -73,9 +74,11 @@ class QueueWorker(Process):
     '''
     Class to spawn worker process with queue of tasks
     '''
-    def __init__(self, queue, name=lambda: str(uuid4())):
+    def __init__(self, queue, position, result_queue=None, name=lambda: str(uuid4())):
         super(QueueWorker, self).__init__(name=name() if callable(name) else name)
         self._queue = queue
+        self._position = position
+        self._result_queue = result_queue
     def __repr__(self):
         return 'QueueWorker(%s, name=%s)'%(type(self._queue).__name__ + '()', self.name)
     def run(self):
@@ -90,20 +93,25 @@ class QueueWorker(Process):
         '''
         while True:
             task = self._queue.get()
-            self._queue.task_done()
-            if task is None:
-                break
             try:
-                task(self.name)
+                if task is None:
+                    break
+                result = task(self.name)
+                if self._result_queue is not None:
+                    self._result_queue.put(result)
             except Exception as e:
                 Logger.error('Uncaught exception while executing %s (%s)'%(type(task).__name__, str(e)))
+                if self._result_queue is not None:
+                    self._result_queue.put(e)
+            finally:
+                self._queue.task_done()
 
 class LoggedQueueWorker(QueueWorker):
     '''
     @QueueWorker
     '''
-    def __init__(self, queue, log_path=None, name=lambda: str(uuid4())):
-        super(LoggedQueueWorker, self).__init__(queue, name)
+    def __init__(self, *args, log_path=None, **kwargs):
+        super(LoggedQueueWorker, self).__init__(*args, **kwargs)
         self._log_path = log_path
     def run(self):
         '''
@@ -114,6 +122,26 @@ class LoggedQueueWorker(QueueWorker):
             Logger.info('Started worker: ' + self.name)
             super(LoggedQueueWorker, self).run()
             Logger.info('Ended worker: ' + self.name)
+
+class ProgressTrackerWorker(QueueWorker):
+    def __init__(self, *args, pcount=None, pdesc=None, punit=None, **kwargs):
+        super(ProgressTrackerWorker, self).__init__(*args, **kwargs)
+        self._pcount = pcount
+        self._pdesc = pdesc
+        self._punit = punit
+    def run(self):
+        with tqdm(total=self._pcount, 
+            desc=self._pdesc, 
+            unit=self._punit) as progress:
+            while True:
+                task = self._queue.get()
+                try:
+                    if task is None:
+                        progress.close()
+                        break
+                    progress.update(1)
+                finally:
+                    self._queue.task_done()
 
 class WorkerPool(object):
     '''
@@ -136,6 +164,63 @@ class WorkerPool(object):
             str(self.daemon),\
             str(self.worker_count),\
             ', **' + str(self._task_kwargs) if len(self._task_kwargs) > 0 else '')
+    @property
+    def queue(self):
+        '''
+        Args:
+            N/A
+        Returns:
+            Underlying queue of worker pool
+        Preconditions:
+            N/A
+        '''
+        return self._queue
+    @property
+    def worker_kwargs(self):
+        '''
+        Args:
+            N/A
+        Returns:
+            Arguments to be applied to all workers in pool
+        Preconditions:
+            N/A
+        '''
+        return self._worker_kwargs
+    @worker_kwargs.setter
+    def worker_kwargs(self, value):
+        '''
+        Args:
+            N/A
+        Procedure:
+            Sets arguments to be applied to all workers in pool
+        Preconditions:
+            value is of type dict
+        '''
+        assert isinstance(value, dict), 'Value is not of type dict'
+        self._worker_kwargs = value
+    @property
+    def task_kwargs(self):
+        '''
+        Args:
+            N/A
+        Returns:
+            Arguments to be applied to all tasks supplied to workers
+        Preconditions:
+            N/A
+        '''
+        return self._task_kwargs
+    @task_kwargs.setter
+    def task_kwargs(self, value):
+        '''
+        Args:
+            N/A
+        Procedure:
+            Sets arguments to be applied to all tasks supplied to workers
+        Preconditions:
+            value is of type dict
+        '''
+        assert isinstance(value, dict), 'Value is not of type dict'
+        self._task_kwargs = value
     def add_task(self, *args, poison_pill=False, **kwargs):
         '''
         Args:
@@ -150,6 +235,7 @@ class WorkerPool(object):
         task_args.update(self._task_kwargs)
         task = self._task_class(*args, **task_args) if not poison_pill else None
         getattr(self._queue, action)(task)
+        return True
     def add_poison_pills(self):
         '''
         Args:
@@ -161,6 +247,21 @@ class WorkerPool(object):
         '''
         for i in range(self.worker_count):
             self.add_task(poison_pill=True)
+        return True
+    def initialize_workers(self):
+        '''
+        Args:
+            N/A
+        Procedure:
+            Create worker objects in self._workers
+        Preconditions:
+            N/A
+        '''
+        self._workers = [\
+            self._worker_class(self._queue, i, **self._worker_kwargs)\
+            for i in range(self.worker_count)\
+        ]
+        return True
     def start(self):
         '''
         Args:
@@ -171,10 +272,7 @@ class WorkerPool(object):
             N/A
         '''
         if self._workers is None:
-            self._workers = [\
-                self._worker_class(self._queue, **self._worker_kwargs)\
-                for i in range(self.worker_count)\
-            ]
+            self.initialize_workers()
         for worker in self._workers:
             if not worker.is_alive():
                 worker.daemon = self.daemon
@@ -219,3 +317,16 @@ class WorkerPool(object):
             for worker in self._workers:
                 if worker.is_alive():
                     worker.terminate()
+        return True
+    def refresh(self):
+        '''
+        Args:
+            N/A
+        Procedure:
+            Terminate all living worker processes and create fresh workers
+        Preconditions:
+            All worker processes have been killed
+        '''
+        #self.terminate()
+        self._workers = None
+        self.initialize_workers()
