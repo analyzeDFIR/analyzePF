@@ -22,7 +22,7 @@
 ## SOFTWARE.
 
 import logging
-from os import fspath, path, getpid
+from os import path, getpid
 from collections import defaultdict
 
 def addProcessScopedHandler(filename, logger=logging.root, mode='a', encoding='UTF-8'):
@@ -45,8 +45,9 @@ class ProcessAwareFileHandler(logging.FileHandler):
     '''
 
     def __init__(self, filename, mode='a', encoding='UTF-8', delay=False):
-        # Issue #27493: add support for Path objects to be passed in
-        filename = fspath(filename)
+        #keep the absolute path, otherwise derived classes which use this
+        #may come a cropper when the current directory changes
+        filename = path.abspath(filename)
         logging.Handler.__init__(self)
         self.streams = defaultdict(dict)
         self.set_filename(path.abspath(filename))
