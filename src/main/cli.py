@@ -33,6 +33,7 @@ def DBConnectConfig(arg):
     Args:
         arg: String => database connection string or filepath
     Returns:
+        String
         Database connection string
     Preconditions:
         arg is of type String   (assumed True)
@@ -48,6 +49,15 @@ def DBConnectConfig(arg):
         raise ArgumentTypeError(str(e))
 
 def initialize_parser():
+    '''
+    Args:
+        N/A
+    Returns:
+        ArgumentParser
+        Command line argument parser
+    Preconditions:
+        N/A
+    '''
     ## Main parser
     main_parser = ArgumentParser(prog='apf.py', description='Windows prefetch file parser')
     main_parser.add_argument('-V', '--version', action='version', version='%(prog)s v0.0.1')

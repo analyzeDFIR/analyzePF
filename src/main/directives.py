@@ -67,6 +67,14 @@ class BaseDirective(object, metaclass=DirectiveRegistry):
     @staticmethod
     def get_frontier(sources):
         '''
+        Args:
+            sources: List<String>   => list of source paths
+        Returns:
+            List<String>
+            List of existing source files to parse (supplied files and
+            files from supplied directories)
+        Preconditions:
+            sources is of type List<String> (asssumed True)
         '''
         frontier = list()
         for src in sources:
@@ -131,23 +139,27 @@ class BaseParseFileOutputDirective(BaseDirective):
     _TASK_CLASS = None
 
     @classmethod
-    def _get_remaining_count(cls, filepath, record_count, max_records):
-        '''
-        '''
-        file_size = stat(filepath).st_size
-        if file_size < cls.MFT_RECORD_SIZE:
-            return None
-        file_records = file_size/cls.MFT_RECORD_SIZE
-        remaining_count = max_records - record_count
-        return file_records if file_records <= remaining_count else remaining_count
-    @classmethod
     def _get_task_kwargs(cls, args):
         '''
+        Args:
+            args: Namespace => command line arguments
+        Returns:
+            Dict<String, Any>
+            Keyword arguments to be supplied to tasks for worker pool
+        Preconditions:
+            args is of type Namespace   (assumed True)
         '''
         raise NotImplementedError('_get_worker_kwargs not implemented for %s'%cls.__name__)
     @classmethod
     def _get_worker_kwargs(cls, args):
         '''
+        Args:
+            args: Namespace => command line arguments
+        Returns:
+            Dict<String, Any>
+            Keyword arguments to be supplied to workers in pool
+        Preconditions:
+            args is of type Namespace   (assumed True)
         '''
         raise NotImplementedError('_get_worker_kwargs not implemented for %s'%cls.__name__)
     @classmethod
@@ -201,6 +213,7 @@ class BaseParseFileOutputDirective(BaseDirective):
 
 class ParseCSVDirective(BaseParseFileOutputDirective):
     '''
+    Directive for parsing Prefetch file to CSV format
     '''
     _TASK_CLASS = tasks.ParseCSVTask
 
@@ -227,6 +240,11 @@ class ParseCSVDirective(BaseParseFileOutputDirective):
             args.sep: String            => separator to use in output file
         Procedure:
             Parse $MFT information to CSV format
+            FIELDS: Version Signature ExecutableName PrefetchHash
+                    SectionAEntriesCount SectionBEntriesCount SectionCLength SectionDEntriesCount
+                    LastExecutionTime ExecutionCount FileNameStrings
+                    VolumeDevicePath VolumeCreateTime VolumeSerialNumber
+                    FileMetricsCount TraceChainsAccount FileReferenceCount DirectoryStringCount 
         Preconditions:
             @BaseDirective.run_directive
             args.info_type is of type String        (assumed True)
@@ -239,6 +257,7 @@ class ParseCSVDirective(BaseParseFileOutputDirective):
 
 class ParseBODYDirective(BaseParseFileOutputDirective):
     '''
+    Directive for parsing Prefetch file to BODY format
     '''
     _TASK_CLASS = tasks.ParseBODYTask
 
@@ -263,7 +282,8 @@ class ParseBODYDirective(BaseParseFileOutputDirective):
             args.target: String         => path to output file
             args.sep: String            => separator to use in output file
         Procedure:
-            Parse $MFT information to CSV format
+            Parse $MFT information to BODY format
+            FIELDS: nodeidx|recordidx|MD5|name|inode|mode_as_string|UID|GID|size|atime|mtime|ctime|crtime
         Preconditions:
             @BaseDirective.run_directive
             args.sources is of type List<String>    (assumed True)
@@ -299,7 +319,7 @@ class ParseJSONDirective(BaseParseFileOutputDirective):
             args.target: String         => path to output file
             args.pretty                 => whether to pretty print JSON output
         Procedure:
-            Parse $MFT information to CSV format
+            Parse $MFT information to JSON format
         Preconditions:
             @BaseDirective.run_directive
             args.sources is of type List<String>    (assumed True)

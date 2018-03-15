@@ -26,6 +26,15 @@ initialize_paths()
 from src.main.cli import initialize_parser
 
 def apf_main():
+    ''''
+    Args:
+        N/A
+    Procedure:
+        Main entry point, parses command line arguments and runs according directive
+        with provided arguments
+    Preconditions:
+        N/A
+    '''
     parser = initialize_parser()
     args = parser.parse_args()
     args.func(args)

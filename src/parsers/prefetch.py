@@ -21,7 +21,6 @@
 ## OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 
-from datetime import datetime
 from io import BytesIO
 from construct.lib import Container
 
@@ -54,6 +53,7 @@ class Prefetch(BaseItem):
         Args:
             N/A
         Returns:
+            ByteString
             Prefetch version if successful, None otherwise
         Preconditions:
             N/A
@@ -66,6 +66,13 @@ class Prefetch(BaseItem):
         return version
     def _clean_transform(self, value):
         '''
+        Args:
+            value: Any  => value to be converted
+        Returns:
+            Raw value if it is not of type Container, else recursively removes
+            any key beginning with 'Raw'
+        Preconditions:
+            N/A
         '''
         if issubclass(type(value), Container):
             cleaned_value = Container(value)
@@ -79,6 +86,10 @@ class Prefetch(BaseItem):
             return value
     def get_stream(self, persist=False):
         '''
+        Args:
+            persist: Boolean    => whether to persist stream as attribute on self
+        Returns:
+            Stream of prefetch file at self.filepath
         '''
         stream = open(self.filepath, 'rb') \
             if self._get_version() is not None \

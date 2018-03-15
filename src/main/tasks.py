@@ -33,6 +33,7 @@ from src.parsers.prefetch import Prefetch
 
 class BaseParseTask(object):
     '''
+    Base task class
     '''
     NULL = None
 
@@ -49,11 +50,32 @@ class BaseParseTask(object):
 
 class BaseParseFileOutputTask(BaseParseTask):
     '''
+    Base task class for writing to output file
     '''
     NULL = ''
 
+    def _get_resultset(self, pf):
+        '''
+        Args:
+            pf: Prefetch    => prefetch file to extract results from 
+        Returns:
+            List<List<Any>>
+            List of results to write to output file
+        Preconditions:
+            pf is of type Prefetch  (assumed True)
+        '''
+        raise NotImplementedError('method _get_resultset not implemented for %s'%type(self).__name__)
     def _handle_resultset(self, result_set, worker_name):
         '''
+        Args:
+            result_set: List<List<Any>> => list of results to write to output file
+            worker_name: String         => name of worker process handling task
+        Procedure:
+            Attempt to write each result in result set to the output file,
+            logging any errors that occur
+        Preconditions:
+            result_set is of type List<List<Any>>   (assumed True)
+            worker_name is of type String           (assumed True)
         '''
         target_file = path.join(self.target, '%s_tmp_amft.out'%worker_name)
         try:
@@ -72,9 +94,11 @@ class BaseParseFileOutputTask(BaseParseTask):
 
 class ParseCSVTask(BaseParseFileOutputTask):
     '''
+    Task class for parsing single Prefetch file to CSV format
     '''
     def _get_resultset(self, pf):
         '''
+        @BaseParseFileOutputTask._get_resultset
         '''
         result_set = list()
         if self.info_type == 'summary':
@@ -83,11 +107,6 @@ class ParseCSVTask(BaseParseFileOutputTask):
             except Exception as e:
                 Logger.error('Failed to parse Prefetch file %s (%s)'%(self.filepath, str(e)))
             else:
-                # FIELDS: Version Signature ExecutableName PrefetchHash
-                #         SectionAEntriesCount SectionBEntriesCount SectionCLength SectionDEntriesCount
-                #         LastExecutionTime ExecutionCount FileNameStrings
-                #         VolumeDevicePath VolumeCreateTime VolumeSerialNumber
-                #         FileMetricsCount TraceChainsAccount FileReferenceCount DirectoryStringCount 
                 try:
                     result = [\
                         str(self.nodeidx),
@@ -118,6 +137,7 @@ class ParseCSVTask(BaseParseFileOutputTask):
 
 class ParseBODYTask(BaseParseFileOutputTask):
     '''
+    Task class for parsing single Prefetch file to BODY format
     '''
     @staticmethod
     def to_timestamp(dt):
@@ -125,6 +145,7 @@ class ParseBODYTask(BaseParseFileOutputTask):
         Args:
             dt: DateTime<UTC>   => datetime object to convert
         Returns:
+            Float
             Datetime object converted to Unix epoch time
         Preconditions:
             dt is timezone-aware timestamp with timezone UTC
@@ -133,6 +154,7 @@ class ParseBODYTask(BaseParseFileOutputTask):
 
     def _get_resultset(self, pf):
         '''
+        @BaseParseFileOutputTask._get_resultset
         '''
         result_set = list()
         try:
@@ -140,7 +162,6 @@ class ParseBODYTask(BaseParseFileOutputTask):
         except Exception as e:
             Logger.error('Failed to parse Prefetch file %s (%s)'%(self.filepath, str(e)))
         else:
-            # FIELDS: nodeidx|recordidx|MD5|name|inode|mode_as_string|UID|GID|size|atime|mtime|ctime|crtime
             try:
                 if len(pf.file_info.LastExecutionTime) > 0:
                     file_path = path.basename(self.filepath)
@@ -169,9 +190,11 @@ class ParseBODYTask(BaseParseFileOutputTask):
 
 class ParseJSONTask(BaseParseFileOutputTask):
     '''
+    Task class for parsing single Prefetch file to JSON format
     '''
     def _get_resultset(self, pf):
         '''
+        @BaseParseFileOutputTask._get_resultset
         '''
         result_set = list()
         try:
