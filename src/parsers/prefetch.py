@@ -69,6 +69,7 @@ class Prefetch(BaseItem):
         Args:
             value: Any  => value to be converted
         Returns:
+            Any
             Raw value if it is not of type Container, else recursively removes
             any key beginning with 'Raw'
         Preconditions:
@@ -89,7 +90,10 @@ class Prefetch(BaseItem):
         Args:
             persist: Boolean    => whether to persist stream as attribute on self
         Returns:
+             TextIOWrapper|BytesIO
             Stream of prefetch file at self.filepath
+        Preconditions:
+            persist is of type Boolean  (assumed True)
         '''
         stream = open(self.filepath, 'rb') \
             if self._get_version() is not None \
@@ -99,6 +103,15 @@ class Prefetch(BaseItem):
         return stream
     def parse_directory_strings(self, stream=None, volume_info=None):
         '''
+        Args:
+            stream: TextIOWrapper|BytesIO   => stream to read from
+            volume_info: Container          => volumes information parsed from stream
+        Returns:
+            List<Container<String, Integer|String>>
+            List of directory strings and their lengths
+        Preconditions:
+            stream is of type TextIOWrapper or BytesIO  (assumedTrue)
+            volume_info is of type Container            (assumedTrue)
         '''
         if stream is None:
             stream = self._stream
@@ -127,6 +140,15 @@ class Prefetch(BaseItem):
             stream.seek(original_position)
     def parse_file_references(self, stream=None, volume_info=None):
         '''
+        Args:
+            stream: TextIOWrapper|BytesIO   => stream to read from
+            volume_info: Container          => volumes information parsed from stream
+        Returns:
+            List<Container<String, Any>>
+            List of file references (see: src.structures.prefetch.PrefetchFileReferences)
+        Preconditions:
+            stream is of type TextIOWrapper or BytesIO  (assumedTrue)
+            volume_info is of type Container            (assumedTrue)
         '''
         if stream is None:
             stream = self._stream
@@ -145,6 +167,17 @@ class Prefetch(BaseItem):
             stream.seek(original_position)
     def parse_volumes_info(self, stream=None, header=None, file_info=None):
         '''
+        Args:
+            stream: TextIOWrapper|BytesIO   => stream to read from
+            header: Container               => prefetch file header information parsed from stream
+            file_info: Container            => file information parsed from stream
+        Returns:
+            List<Container<String, Any>>
+            Prefetch file volumes information (see src.structures.prefetch.PrefetchVolumeInformation*)
+        Preconditions:
+            stream is of type TextIOWrapper or BytesIO  (assumedTrue)
+            header is of type Container                 (assumedTrue)
+            file_info is of type Container              (assumedTrue)
         '''
         if stream is None:
             stream = self._stream
@@ -180,6 +213,19 @@ class Prefetch(BaseItem):
             stream.seek(original_position)
     def parse_filename_strings(self, stream=None, header=None, file_info=None, file_metrics=None):
         '''
+        Args:
+            stream: TextIOWrapper|BytesIO   => stream to read from
+            header: Container               => prefetch file header information parsed from stream
+            file_info: Container            => file information parsed from stream
+            file_metrics: Container         => file metrics array parsed from stream
+        Returns:
+            List<String>
+            List of filename strings associated with file_metrics array
+        Preconditions:
+            stream is of type TextIOWrapper or BytesIO  (assumedTrue)
+            header is of type Container                 (assumedTrue)
+            file_info is of type Container              (assumedTrue)
+            file_metrics is of type Container           (assumedTrue)
         '''
         if stream is None:
             stream = self._stream
@@ -208,6 +254,17 @@ class Prefetch(BaseItem):
             stream.seek(original_position)
     def parse_trace_chains(self, stream=None, header=None, file_info=None):
         '''
+        Args:
+            stream: TextIOWrapper|BytesIO   => stream to read from
+            header: Container               => prefetch file header information parsed from stream
+            file_info: Container            => file information parsed from stream
+        Returns:
+            List<Container<String, Any>>
+            Prefetch file trace chains information array (see: src.structures.prefetch.PrefetchTraceChainEntry)
+        Preconditions:
+            stream is of type TextIOWrapper or BytesIO  (assumedTrue)
+            header is of type Container                 (assumedTrue)
+            file_info is of type Container              (assumedTrue)
         '''
         if stream is None:
             stream = self._stream
@@ -229,6 +286,17 @@ class Prefetch(BaseItem):
             stream.seek(original_position)
     def parse_file_metrics(self, stream=None, header=None, file_info=None):
         '''
+        Args:
+            stream: TextIOWrapper|BytesIO   => stream to read from
+            header: Container               => prefetch file header information parsed from stream
+            file_info: Container            => file information parsed from stream
+        Returns:
+            List<Container<String, Any>>
+            Prefetch file metrics information array (see: src.structures.prefetch.PrefetchFileMetrics*)
+        Preconditions:
+            stream is of type TextIOWrapper or BytesIO  (assumedTrue)
+            header is of type Container                 (assumedTrue)
+            file_info is of type Container              (assumedTrue)
         '''
         if stream is None:
             stream = self._stream
@@ -253,14 +321,23 @@ class Prefetch(BaseItem):
             file_metrics = list()
             for i in range(file_info.get('SectionAEntriesCount')):
                 file_metrics_entry = self._clean_transform(PrefetchFileMetricsEntry.parse_stream(stream))
-                if hasattr(file_metrics_entry, 'NTFSFileReference'):
-                    file_metrics_entry.NTFSFileReference = self._clean_transform(file_metrics_entry.NTFSFileReference)
+                if hasattr(file_metrics_entry, 'FileReference'):
+                    file_metrics_entry.FileReference = self._clean_transform(file_metrics_entry.FileReference)
                 file_metrics.append(file_metrics_entry)
             return file_metrics
         finally:
             stream.seek(original_position)
     def parse_file_info(self, stream=None, header=None):
         '''
+        Args:
+            stream: TextIOWrapper|BytesIO   => stream to read from
+            header: Container               => prefetch file header information parsed from stream
+        Returns:
+            Container<String, Any>
+            Prefetch file information (see src.structures.prefetch.PrefetchFileInformation*)
+        Preconditions:
+            stream is of type TextIOWrapper or BytesIO  (assumedTrue)
+            header is of type Container                 (assumedTrue)
         '''
         if stream is None:
             stream = self._stream
@@ -279,6 +356,13 @@ class Prefetch(BaseItem):
         return self._clean_transform(file_info)
     def parse_header(self, stream=None):
         '''
+        Args:
+            stream: TextIOWrapper|BytesIO   => stream to read from
+        Returns:
+            Container<String, Any>
+            Prefetch file header information (see src.structures.prefetch.PrefetchHeader)
+        Preconditions:
+            stream is of type TextIOWrapper or BytesIO  (assumedTrue)
         '''
         if stream is None:
             stream = self._stream

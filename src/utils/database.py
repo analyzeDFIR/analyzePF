@@ -116,6 +116,7 @@ def create_view(name, selectable, metadata, materialized=False):
         metadata: MetaData      => metadata to listen for events on
         materialized: Boolean   => whether to create standard or materialized view
     Returns:
+        Table
         Table object bound to temporary MetaData object with columns as
         columns returned from selectable (essentially creates table as view)
         NOTE:

@@ -29,7 +29,7 @@ FILETIME = Struct(
     'dwHighDateTime'    / Int32ul
 )
 
-MFTFileReference = Struct(
+NTFSFileReference = Struct(
     'SegmentNumber'     / Int32ul,
     Padding(2),
     'SequenceNumber'    / Int16ul

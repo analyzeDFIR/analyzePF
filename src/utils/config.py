@@ -71,12 +71,18 @@ def initialize_logger(log_path, log_prefix='main_tmp_amft', format=LOGGING_DEFAU
     Args:
         log_path: String    => valid path to output log to
         log_prefix: String  => prefix to log file
+        format: String      => log record format
+        datefmt: String     => log record date format
+        level: Integer      => minimum logging level to handle
     Procedure:
         Initialize root logger with formatter, level, and handler set to 
         FileHandler at path (log_path + log_prefix.log)
     Preconditions:
         log_path is of type String
-        log_prefix is of type Sring
+        log_prefix is of type Sring (assumed True)
+        format is of type String    (assumed True)
+        datefmt is of type String   (assumed True)
+        level is of type String     (assumed True)
     '''
     full_log_path = synthesize_log_path(log_path, log_prefix)
     if len(logging.root.handlers) == 0:

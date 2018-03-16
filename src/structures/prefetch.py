@@ -23,7 +23,7 @@
 
 from construct import *
 
-from .general import FILETIME, MFTFileReference
+from .general import FILETIME, NTFSFileReference
 
 PrefetchFileNameString = CString(encoding='utf16')
 
@@ -50,7 +50,7 @@ PrefetchTraceChainEntry = Struct(
 PrefetchFileReferences = Struct(
     Padding(4),
     'ReferenceCount'        / Int32ul,
-    'References'            / Array(this.ReferenceCount, MFTFileReference)
+    'References'            / Array(this.ReferenceCount, NTFSFileReference)
 )
 
 PrefetchDirectoryString = Struct(
@@ -110,7 +110,7 @@ PrefetchFileInformation23 = Struct(
     'SectionDEntriesCount'  / Int32ul,
     'SectionDLength'        / Int32ul,
     Padding(8),
-    'RawLastExecutionTime'     / Array(1, FILETIME),
+    'RawLastExecutionTime'  / Array(1, FILETIME),
     Padding(16),
     'ExecutionCount'        / Int32ul,
     Padding(84)
@@ -123,7 +123,7 @@ PrefetchFileMetricsEntry23 = Struct(
     'FileNameOffset'        / Int32ul,
     'FileNameLength'        / Int32ul,
     Padding(4),
-    'NTFSFileReference'     / MFTFileReference
+    'FileReference'         / NTFSFileReference
 )
 
 PrefetchVolumeInformation23 = Struct(
@@ -149,7 +149,7 @@ PrefetchFileInformation26 = Struct(
     'SectionDEntriesCount'  / Int32ul,
     'SectionDLength'        / Int32ul,
     Padding(8),
-    'RawLastExecutionTime'     / Array(8, FILETIME),
+    'RawLastExecutionTime'  / Array(8, FILETIME),
     Padding(16),
     'ExecutionCount'        / Int32ul,
     Padding(96)
