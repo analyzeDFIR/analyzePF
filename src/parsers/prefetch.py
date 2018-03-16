@@ -199,16 +199,20 @@ class Prefetch(BaseItem):
                 PrefetchVolumeInformation = pfstructs.PrefetchVolumeInformation26
             else:
                 PrefetchVolumeInformation = pfstructs.PrefetchVolumeInformation30
-            volumes_info = PrefetchVolumeInformation.parse_stream(stream)
-            volumes_info.VolumeCreateTime = WindowsTime(volumes_info.RawVolumeCreateTime).parse()
-            stream.seek(0)
-            stream.seek(file_info.get('SectionDOffset') + volumes_info.get('VolumeDevicePathOffset'))
-            volumes_info.VolumeDevicePath = pfstructs.String(\
-                    volumes_info.VolumeDevicePathLength, \
-                    encoding='utf8').parse(\
-                        stream.read(volumes_info.VolumeDevicePathLength*2).replace(b'\x00', b'')\
-                    )
-            return self._clean_transform(volumes_info)
+            volumes_info_list = list()
+            for i in range(file_info.SectionDEntriesCount):
+                volumes_info = PrefetchVolumeInformation.parse_stream(stream)
+                volumes_info_position = stream.tell()
+                volumes_info.VolumeCreateTime = WindowsTime(volumes_info.RawVolumeCreateTime).parse()
+                stream.seek(file_info.get('SectionDOffset') + volumes_info.get('VolumeDevicePathOffset'))
+                volumes_info.VolumeDevicePath = pfstructs.String(\
+                        volumes_info.VolumeDevicePathLength, \
+                        encoding='utf8').parse(\
+                            stream.read(volumes_info.VolumeDevicePathLength*2).replace(b'\x00', b'')\
+                        )
+                volumes_info_list.append(volumes_info)
+                stream.seek(volumes_info_position)
+            return self._clean_transform(volumes_info_list)
         finally:
             stream.seek(original_position)
     def parse_filename_strings(self, stream=None, header=None, file_info=None, file_metrics=None):

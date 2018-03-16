@@ -24,7 +24,7 @@
 from src.utils.time import WindowsTime
 from construct import *
 
-FILETIME = Struct(
+NTFSFILETIME = Struct(
     'dwLowDateTime'     / Int32ul,
     'dwHighDateTime'    / Int32ul
 )

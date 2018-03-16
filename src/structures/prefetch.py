@@ -23,12 +23,27 @@
 
 from construct import *
 
-from .general import FILETIME, NTFSFileReference
+from .general import NTFSFILETIME, NTFSFileReference
 
 PrefetchFileNameString = CString(encoding='utf16')
 
+'''
+Prefetch Version: prefetch file format version
+    XP      => 0x11 (XP, 2003)
+    SEVEN   => 0x17 (Vista, 7)
+    EIGHT   => 0x1a (8, 8.1)
+    TEN     => 0x1e (10)
+'''
 PrefetchVersion = Enum(Int32ul, XP=0x11, SEVEN=0x17, EIGHT=0x1a, TEN=0x1e)
 
+'''
+Prefetch Header: header of prefetch file
+    Version: version of prefetch file format (see: PrefetchVersion)
+    RawSignature: prefetch file signature (should always be SCCA)
+    FileSize: size of prefetch file in bytes, including header
+    RawExecutableName: name of the executable associated with prefetch file
+    RawPrefetchHash: prefetch hash of the executable associated with prefetch file
+'''
 PrefetchHeader = Struct(
     'Version'           / PrefetchVersion,
     'RawSignature'      / Const(b'SCCA'),
@@ -39,6 +54,12 @@ PrefetchHeader = Struct(
     Padding(4)
 )
 
+'''
+Prefetch Trace Chain Entry: trace chain array entry
+    NextEntryIndex: next index in trace chain array (0 is start, -1 is end)
+    TotalBlockLoadCount: total count of blocks loaded, where block size is 512KB
+    SampleDuration: Unknown, but suggested to be sample duration in milliseconds
+'''
 PrefetchTraceChainEntry = Struct(
     'NextEntryIndex'        / Int32ul,
     'TotalBlockLoadCount'   / Int32ul,
@@ -47,21 +68,33 @@ PrefetchTraceChainEntry = Struct(
     Padding(2)
 )
 
+'''
+Prefetch File References: reference to files associated with executable
+    ReferenceCount: number of file references
+    References: array of file references (see: NTFSFileReference)
+'''
 PrefetchFileReferences = Struct(
     Padding(4),
     'ReferenceCount'        / Int32ul,
     'References'            / Array(this.ReferenceCount, NTFSFileReference)
 )
 
+'''
+Prefetch Directory String: prefetch file directory string
+    **TODO
+'''
 PrefetchDirectoryString = Struct(
     'Length'                / Int16ul
 )
 
 '''
-Section A: File metrics array
-Section B: Trace chains array
-Section C: Filename strings
-Section D: Volumes information
+Prefetch File Information: metadata about information stored in prefetch file
+    Section A: File metrics array
+    Section B: Trace chains array
+    Section C: Filename strings
+    Section D: Volumes information
+    RawLastExecutionTime: array of NTFSFILETIME objects
+    ExecutionCount: number of times executable has been run
 '''
 PrefetchFileInformation17 = Struct(
     'SectionAOffset'        / Int32ul,
@@ -73,12 +106,19 @@ PrefetchFileInformation17 = Struct(
     'SectionDOffset'        / Int32ul,
     'SectionDEntriesCount'  / Int32ul,
     'SectionDLength'        / Int32ul,
-    'RawLastExecutionTime'  / Array(1, FILETIME),
+    'RawLastExecutionTime'  / Array(1, NTFSFILETIME),
     Padding(16),
     'ExecutionCount'        / Int32ul,
     Padding(4)
 )
 
+'''
+Prefetch File Metrics Entry: file loading metrics of files associated with executable
+    StartTime: prefetch start time in milliseconds
+    Duration: prefetch duration time in milliseconds
+    FileNameOffset: offset to filename associated with these metrics
+    FileNameLength: length of filename associated with these metrics
+'''
 PrefetchFileMetricsEntry17 = Struct(
     'StartTime'             / Int32ul,
     'Duration'              / Int32ul,
@@ -87,10 +127,13 @@ PrefetchFileMetricsEntry17 = Struct(
     Padding(4)
 )
 
+'''
+Prefetch Volume Information: information about volume executable was sourced from
+'''
 PrefetchVolumeInformation17 = Struct(
     'VolumeDevicePathOffset'    / Int32ul,
     'VolumeDevicePathLength'    / Int32ul,
-    'RawVolumeCreateTime'       / FILETIME,
+    'RawVolumeCreateTime'       / NTFSFILETIME,
     'VolumeSerialNumber'        / Int32ul,
     'SectionEOffset'            / Int32ul,
     'SectionELength'            / Int32ul,
@@ -110,7 +153,7 @@ PrefetchFileInformation23 = Struct(
     'SectionDEntriesCount'  / Int32ul,
     'SectionDLength'        / Int32ul,
     Padding(8),
-    'RawLastExecutionTime'  / Array(1, FILETIME),
+    'RawLastExecutionTime'  / Array(1, NTFSFILETIME),
     Padding(16),
     'ExecutionCount'        / Int32ul,
     Padding(84)
@@ -129,7 +172,7 @@ PrefetchFileMetricsEntry23 = Struct(
 PrefetchVolumeInformation23 = Struct(
     'VolumeDevicePathOffset'    / Int32ul,
     'VolumeDevicePathLength'    / Int32ul,
-    'RawVolumeCreateTime'       / FILETIME,
+    'RawVolumeCreateTime'       / NTFSFILETIME,
     'VolumeSerialNumber'        / Int32ul,
     'SectionEOffset'            / Int32ul,
     'SectionELength'            / Int32ul,
@@ -149,7 +192,7 @@ PrefetchFileInformation26 = Struct(
     'SectionDEntriesCount'  / Int32ul,
     'SectionDLength'        / Int32ul,
     Padding(8),
-    'RawLastExecutionTime'  / Array(8, FILETIME),
+    'RawLastExecutionTime'  / Array(8, NTFSFILETIME),
     Padding(16),
     'ExecutionCount'        / Int32ul,
     Padding(96)
@@ -166,7 +209,7 @@ PrefetchFileMetricsEntry30 = PrefetchFileMetricsEntry26
 PrefetchVolumeInformation30 = Struct(
     'VolumeDevicePathOffset'    / Int32ul,
     'VolumeDevicePathLength'    / Int32ul,
-    'RawVolumeCreateTime'       / FILETIME,
+    'RawVolumeCreateTime'       / NTFSFILETIME,
     'VolumeSerialNumber'        / Int32ul,
     'SectionEOffset'            / Int32ul,
     'SectionELength'            / Int32ul,
