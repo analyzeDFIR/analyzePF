@@ -22,6 +22,7 @@
 ## SOFTWARE.
 
 from io import BytesIO
+import inspect
 from construct.lib import Container
 
 from .decompress import DecompressWin10
@@ -83,14 +84,57 @@ class Prefetch(BaseItem):
                 else:
                     cleaned_value[key] = self._clean_transform(cleaned_value[key])
             return cleaned_value
+        elif isinstance(value, list):
+            return list(map(lambda entry: self._clean_transform(entry), value))
         else:
             return value
+    def _prepare_kwargs(self, structure_parser, **kwargs):
+        '''
+        Args:
+            structure_parser: Callable  => function to prepare kwargs for
+            kwargs: Dict<String, Any>   => kwargs to prepare
+        Returns:
+            Dict<String, Any>
+            Same set of keyword arguments but with values filled in
+            for kwargs supplied as None with attribute values from self
+            NOTE:
+                This function uses the inspect module to get the keyword
+                arguments for the given structure parser.  I know this is weird
+                and non-standard OOP, and is subject to change int the future,
+                but it works as a nice abstraction on the various structure parsers 
+                for now.
+        Preconditions:
+            structure_parser is callable that takes 0 or more keyword arguments
+            Only keyword arguments supplied to function
+        '''
+        argspec = inspect.getargspec(structure_parser)
+        kwargs_keys = argspec.args[(len(argspec.args) - len(argspec.defaults))+1:]
+        prepared_kwargs = dict()
+        for key in kwargs_keys:
+            if key in kwargs:
+                if kwargs[key] is None:
+                    prepared_kwargs[key] = getattr(\
+                        self, 
+                        key if key != 'stream' else '_stream', 
+                        None\
+                    )
+                    if prepared_kwargs[key] is None:
+                        raise Exception('Attribute %s was no provided and has not been parsed'%key)
+                else:
+                    prepared_kwargs[key] = kwargs[key]
+            else:
+                prepared_kwargs[key] = getattr(\
+                    self, 
+                    key if key != 'stream' else '_stream', 
+                    None\
+                )
+        return prepared_kwargs
     def get_stream(self, persist=False):
         '''
         Args:
             persist: Boolean    => whether to persist stream as attribute on self
         Returns:
-             TextIOWrapper|BytesIO
+            TextIOWrapper|BytesIO
             Stream of prefetch file at self.filepath
         Preconditions:
             persist is of type Boolean  (assumed True)
@@ -101,73 +145,73 @@ class Prefetch(BaseItem):
         if persist:
             self._stream = stream
         return stream
-    def parse_directory_strings(self, stream=None, volume_info=None):
+    def _parse_directory_strings(self, original_position, stream=None, file_info=None, volumes_info=None):
         '''
         Args:
-            stream: TextIOWrapper|BytesIO   => stream to read from
-            volume_info: Container          => volumes information parsed from stream
+            original_position: Integer                  => position in stream before parsing this structure
+            stream: TextIOWrapper|BytesIO               => stream to read from
+            file_info: Container                        => file information parsed from stream
+            volumes_info: List<Container<String, Any>>  => volumes information parsed from stream
         Returns:
             List<Container<String, Integer|String>>
             List of directory strings and their lengths
         Preconditions:
-            stream is of type TextIOWrapper or BytesIO  (assumedTrue)
-            volume_info is of type Container            (assumedTrue)
+            original_position is of type Integer                (assumed True)
+            stream is of type TextIOWrapper or BytesIO          (assumed True)
+            file_info is of type Container                      (assumed True)
+            volume_info is of type List<Container<String, Any>> (assumed True)
         '''
-        if stream is None:
-            stream = self._stream
-        if volume_info is None:
-            volume_info = self.volumes_info
-        if volume_info is None:
-            return None
-        original_position = stream.tell()
         try:
-            stream.seek(0)
-            stream.seek(volume_info.get('SectionFOffset'))
             directory_strings = list()
-            for i in range(volume_info.get('SectionFStringsCount')):
-                try:
-                    directory_string_struct = pfstructs.PrefetchDirectoryString.parse_stream(stream)
-                    directory_string_struct.String = stream.read(directory_string_struct.Length * 2 + 2)
-                    directory_strings.append(Container(\
-                        Length=directory_string_struct.Length,
-                        String=directory_string_struct.String\
-                        )\
-                    )
-                except:
-                    directory_strings.append(None)
-            return directory_strings
+            for volumes_info_entry in volumes_info:
+                directory_strings_entry = list()
+                stream.seek(file_info.SectionDOffset + volumes_info_entry.SectionFOffset)
+                for i in range(volumes_info_entry.SectionFStringsCount):
+                    try:
+                        directory_string_struct = pfstructs.PrefetchDirectoryString.parse_stream(stream)
+                        directory_string_struct.String = stream.read(directory_string_struct.Length * 2 + 2).decode('UTF16')
+                        directory_strings_entry.append(directory_string_struct.String.strip('\x00'))
+                    except Exception as e:
+                        Logger.error('Error parsing directory strings entry (%s)'%str(e))
+                        directory_strings_entry.append(None)
+                directory_strings.append(directory_strings_entry)
+            return self._clean_transform(directory_strings)
         finally:
             stream.seek(original_position)
-    def parse_file_references(self, stream=None, volume_info=None):
+    def _parse_file_references(self, original_position, stream=None, file_info=None, volumes_info=None):
         '''
         Args:
-            stream: TextIOWrapper|BytesIO   => stream to read from
-            volume_info: Container          => volumes information parsed from stream
+            original_position: Integer                  => position in stream before parsing this structure
+            stream: TextIOWrapper|BytesIO               => stream to read from
+            file_info: Container                        => file information parsed from stream
+            volumes_info: List<Container<String, Any>>  => volumes information parsed from stream
         Returns:
             List<Container<String, Any>>
             List of file references (see: src.structures.prefetch.PrefetchFileReferences)
         Preconditions:
-            stream is of type TextIOWrapper or BytesIO  (assumedTrue)
-            volume_info is of type Container            (assumedTrue)
+            original_position is of type Integer                (assumed True)
+            stream is of type TextIOWrapper or BytesIO          (assumed True)
+            file_info is of type Container                      (assumed True)
+            volume_info is of type List<Container<String, Any>> (assumed True)
         '''
-        if stream is None:
-            stream = self._stream
-        if volume_info is None:
-            volume_info = self.volumes_info
-        if volume_info is None:
-            return None
-        original_position = stream.tell()
         try:
-            stream.seek(0)
-            stream.seek(volume_info.get('SectionEOffset'))
-            file_refs = self._clean_transform(pfstructs.PrefetchFileReferences.parse_stream(stream))
-            file_refs['References'] = list(map(lambda ref: Container(**ref), file_refs['References']))
-            return file_refs
+            file_refs = list()
+            for volumes_info_entry in volumes_info:
+                try:
+                    stream.seek(file_info.SectionDOffset + volumes_info_entry.SectionEOffset)
+                    file_refs_entry = pfstructs.PrefetchFileReferences.parse_stream(stream)
+                    file_refs_entry.References = list(map(lambda ref: Container(**ref), file_refs_entry.References))
+                    file_refs.append(file_refs_entry)
+                except Exception as e:
+                    Logger.error('Error parsing file_refs_entry (%s)'%str(e))
+                    file_refs.append(None)
+            return self._clean_transform(file_refs)
         finally:
             stream.seek(original_position)
-    def parse_volumes_info(self, stream=None, header=None, file_info=None):
+    def _parse_volumes_info(self, original_position, stream=None, header=None, file_info=None):
         '''
         Args:
+            original_position: Integer      => position in stream before parsing this structure
             stream: TextIOWrapper|BytesIO   => stream to read from
             header: Container               => prefetch file header information parsed from stream
             file_info: Container            => file information parsed from stream
@@ -175,49 +219,41 @@ class Prefetch(BaseItem):
             List<Container<String, Any>>
             Prefetch file volumes information (see src.structures.prefetch.PrefetchVolumeInformation*)
         Preconditions:
-            stream is of type TextIOWrapper or BytesIO  (assumedTrue)
-            header is of type Container                 (assumedTrue)
-            file_info is of type Container              (assumedTrue)
+            original_position is of type Integer        (assumed True)
+            stream is of type TextIOWrapper or BytesIO  (assumed True)
+            header is of type Container                 (assumed True)
+            file_info is of type Container              (assumed True)
         '''
-        if stream is None:
-            stream = self._stream
-        if header is None:
-            header = self.header
-        if file_info is None:
-            file_info = self.file_info
-        if header is None or file_info is None:
-            return None
-        original_position = stream.tell()
         try:
-            stream.seek(0)
-            stream.seek(file_info.get('SectionDOffset'))
-            if header.get('Version') == 'XP':
+            stream.seek(file_info.SectionDOffset)
+            if header.Version == 'XP':
                 PrefetchVolumeInformation = pfstructs.PrefetchVolumeInformation17
-            elif header.get('Version') == 'SEVEN':
+            elif header.Version == 'SEVEN':
                 PrefetchVolumeInformation = pfstructs.PrefetchVolumeInformation23
-            elif header.get('Version') == 'EIGHT':
+            elif header.Version == 'EIGHT':
                 PrefetchVolumeInformation = pfstructs.PrefetchVolumeInformation26
             else:
                 PrefetchVolumeInformation = pfstructs.PrefetchVolumeInformation30
-            volumes_info_list = list()
+            volumes_info = list()
             for i in range(file_info.SectionDEntriesCount):
-                volumes_info = PrefetchVolumeInformation.parse_stream(stream)
+                volumes_info_entry = PrefetchVolumeInformation.parse_stream(stream)
                 volumes_info_position = stream.tell()
-                volumes_info.VolumeCreateTime = WindowsTime(volumes_info.RawVolumeCreateTime).parse()
-                stream.seek(file_info.get('SectionDOffset') + volumes_info.get('VolumeDevicePathOffset'))
-                volumes_info.VolumeDevicePath = pfstructs.String(\
-                        volumes_info.VolumeDevicePathLength, \
+                volumes_info_entry.VolumeCreateTime = WindowsTime(volumes_info_entry.RawVolumeCreateTime).parse()
+                stream.seek(file_info.SectionDOffset + volumes_info_entry.VolumeDevicePathOffset)
+                volumes_info_entry.VolumeDevicePath = pfstructs.String(\
+                        volumes_info_entry.VolumeDevicePathLength, \
                         encoding='utf8').parse(\
-                            stream.read(volumes_info.VolumeDevicePathLength*2).replace(b'\x00', b'')\
+                            stream.read(volumes_info_entry.VolumeDevicePathLength*2).replace(b'\x00', b'')\
                         )
-                volumes_info_list.append(volumes_info)
+                volumes_info.append(volumes_info_entry)
                 stream.seek(volumes_info_position)
-            return self._clean_transform(volumes_info_list)
+            return self._clean_transform(volumes_info)
         finally:
             stream.seek(original_position)
-    def parse_filename_strings(self, stream=None, header=None, file_info=None, file_metrics=None):
+    def _parse_filename_strings(self, original_position, stream=None, header=None, file_info=None, file_metrics=None):
         '''
         Args:
+            original_position: Integer      => position in stream before parsing this structure
             stream: TextIOWrapper|BytesIO   => stream to read from
             header: Container               => prefetch file header information parsed from stream
             file_info: Container            => file information parsed from stream
@@ -226,39 +262,29 @@ class Prefetch(BaseItem):
             List<String>
             List of filename strings associated with file_metrics array
         Preconditions:
-            stream is of type TextIOWrapper or BytesIO  (assumedTrue)
-            header is of type Container                 (assumedTrue)
-            file_info is of type Container              (assumedTrue)
-            file_metrics is of type Container           (assumedTrue)
+            original_position is of type Integer        (assumed True)
+            stream is of type TextIOWrapper or BytesIO  (assumed True)
+            header is of type Container                 (assumed True)
+            file_info is of type Container              (assumed True)
+            file_metrics is of type Container           (assumed True)
         '''
-        if stream is None:
-            stream = self._stream
-        if header is None:
-            header = self.header
-        if file_info is None:
-            file_info = self.file_info
-        if file_metrics is None:
-            file_metrics = self.file_metrics
-        if header is None or file_info is None or file_metrics is None:
-            return None
-        original_position = stream.tell()
         try:
-            stream.seek(0)
-            stream.seek(file_info.get('SectionCOffset'))
+            stream.seek(file_info.SectionCOffset)
             filename_strings = list()
             for file_metric in file_metrics:
-                if (stream.tell() - file_info.get('SectionCOffset')) <= file_info.get('SectionCLength'):
+                if (stream.tell() - file_info.SectionCOffset) <= file_info.SectionCLength:
                     filename_strings.append(\
                         pfstructs.PrefetchFileNameString.parse_stream(stream)\
                     )
                 else:
                     filename_strings.append(None)
-            return filename_strings
+            return self._clean_transform(filename_strings)
         finally:
             stream.seek(original_position)
-    def parse_trace_chains(self, stream=None, header=None, file_info=None):
+    def _parse_trace_chains(self, original_position, stream=None, header=None, file_info=None):
         '''
         Args:
+            original_position: Integer      => position in stream before parsing this structure
             stream: TextIOWrapper|BytesIO   => stream to read from
             header: Container               => prefetch file header information parsed from stream
             file_info: Container            => file information parsed from stream
@@ -266,31 +292,23 @@ class Prefetch(BaseItem):
             List<Container<String, Any>>
             Prefetch file trace chains information array (see: src.structures.prefetch.PrefetchTraceChainEntry)
         Preconditions:
-            stream is of type TextIOWrapper or BytesIO  (assumedTrue)
-            header is of type Container                 (assumedTrue)
-            file_info is of type Container              (assumedTrue)
+            original_position is of type Integer        (assumed True)
+            stream is of type TextIOWrapper or BytesIO  (assumed True)
+            header is of type Container                 (assumed True)
+            file_info is of type Container              (assumed True)
         '''
-        if stream is None:
-            stream = self._stream
-        if header is None:
-            header = self.header
-        if file_info is None:
-            file_info = self.file_info
-        if header is None or file_info is None:
-            return None
-        original_position = stream.tell()
         try:
-            stream.seek(0)
-            stream.seek(file_info.get('SectionBOffset'))
+            stream.seek(file_info.SectionBOffset)
             trace_chains = list()
-            for i in range(file_info.get('SectionBEntriesCount')):
-                trace_chains.append(self._clean_transform(pfstructs.PrefetchTraceChainEntry.parse_stream(stream)))
-            return trace_chains
+            for i in range(file_info.SectionBEntriesCount):
+                trace_chains.append(pfstructs.PrefetchTraceChainEntry.parse_stream(stream))
+            return self._clean_transform(trace_chains)
         finally:
             stream.seek(original_position)
-    def parse_file_metrics(self, stream=None, header=None, file_info=None):
+    def _parse_file_metrics(self, original_position, stream=None, header=None, file_info=None):
         '''
         Args:
+            original_position: Integer      => position in stream before parsing this structure
             stream: TextIOWrapper|BytesIO   => stream to read from
             header: Container               => prefetch file header information parsed from stream
             file_info: Container            => file information parsed from stream
@@ -298,83 +316,93 @@ class Prefetch(BaseItem):
             List<Container<String, Any>>
             Prefetch file metrics information array (see: src.structures.prefetch.PrefetchFileMetrics*)
         Preconditions:
-            stream is of type TextIOWrapper or BytesIO  (assumedTrue)
-            header is of type Container                 (assumedTrue)
-            file_info is of type Container              (assumedTrue)
+            original_position is of type Integer        (assumed True)
+            stream is of type TextIOWrapper or BytesIO  (assumed True)
+            header is of type Container                 (assumed True)
+            file_info is of type Container              (assumed True)
         '''
-        if stream is None:
-            stream = self._stream
-        if header is None:
-            header = self.header
-        if file_info is None:
-            file_info = self.file_info
-        if header is None or file_info is None:
-            return None
-        original_position = stream.tell()
         try:
-            stream.seek(0)
-            stream.seek(file_info.get('SectionAOffset'))
-            if header.get('Version') == 'XP':
+            stream.seek(file_info.SectionAOffset)
+            if header.Version == 'XP':
                 PrefetchFileMetricsEntry = pfstructs.PrefetchFileMetricsEntry17
-            elif header.get('Version') == 'SEVEN':
+            elif header.Version == 'SEVEN':
                 PrefetchFileMetricsEntry = pfstructs.PrefetchFileMetricsEntry23
-            elif header.get('Version') == 'EIGHT':
+            elif header.Version == 'EIGHT':
                 PrefetchFileMetricsEntry = pfstructs.PrefetchFileMetricsEntry26
             else:
                 PrefetchFileMetricsEntry = pfstructs.PrefetchFileMetricsEntry30
             file_metrics = list()
-            for i in range(file_info.get('SectionAEntriesCount')):
+            for i in range(file_info.SectionAEntriesCount):
                 file_metrics_entry = self._clean_transform(PrefetchFileMetricsEntry.parse_stream(stream))
                 if hasattr(file_metrics_entry, 'FileReference'):
                     file_metrics_entry.FileReference = self._clean_transform(file_metrics_entry.FileReference)
                 file_metrics.append(file_metrics_entry)
-            return file_metrics
+            return self._clean_transform(file_metrics)
         finally:
             stream.seek(original_position)
-    def parse_file_info(self, stream=None, header=None):
+    def _parse_file_info(self, original_position, stream=None, header=None):
         '''
         Args:
+            original_position: Integer      => position in stream before parsing this structure
             stream: TextIOWrapper|BytesIO   => stream to read from
             header: Container               => prefetch file header information parsed from stream
         Returns:
             Container<String, Any>
             Prefetch file information (see src.structures.prefetch.PrefetchFileInformation*)
         Preconditions:
-            stream is of type TextIOWrapper or BytesIO  (assumedTrue)
-            header is of type Container                 (assumedTrue)
+            original_position is of type Integer        (assumed True)
+            stream is of type TextIOWrapper or BytesIO  (assumed True)
+            header is of type Container                 (assumed True)
         '''
-        if stream is None:
-            stream = self._stream
-        if header is None:
-            header = self.header
-        if header.get('Version') == 'XP':
+        if header.Version == 'XP':
             PrefetchFileInformation = pfstructs.PrefetchFileInformation17
-        elif header.get('Version') == 'SEVEN':
+        elif header.Version == 'SEVEN':
             PrefetchFileInformation = pfstructs.PrefetchFileInformation23
-        elif header.get('Version') == 'EIGHT':
+        elif header.Version == 'EIGHT':
             PrefetchFileInformation = pfstructs.PrefetchFileInformation26
         else:
             PrefetchFileInformation = pfstructs.PrefetchFileInformation30
         file_info =  PrefetchFileInformation.parse_stream(stream)
         file_info.LastExecutionTime = list(map(lambda ft: WindowsTime(ft).parse(), file_info.RawLastExecutionTime))
         return self._clean_transform(file_info)
-    def parse_header(self, stream=None):
+    def _parse_header(self, original_position, stream=None):
         '''
         Args:
+            original_position: Integer      => position in stream before parsing this structure
             stream: TextIOWrapper|BytesIO   => stream to read from
         Returns:
             Container<String, Any>
             Prefetch file header information (see src.structures.prefetch.PrefetchHeader)
         Preconditions:
-            stream is of type TextIOWrapper or BytesIO  (assumedTrue)
+            original_position is of type Integer        (assumed True)
+            stream is of type TextIOWrapper or BytesIO  (assumed True)
         '''
-        if stream is None:
-            stream = self._stream
         header = pfstructs.PrefetchHeader.parse_stream(stream)
         header.Signature = header.RawSignature.decode('utf8')
         header.ExecutableName = header.RawExecutableName.split('\x00')[0]
         header.PrefetchHash = hex(header.RawPrefetchHash).replace('0x', '').upper()
         return self._clean_transform(header)
+    def parse_structure(self, structure, *args, stream=None, **kwargs):
+        '''
+        '''
+        if stream is None:
+            stream = self._stream
+        structure_parser = getattr(self, '_parse_' + structure, None)
+        if structure_parser is None:
+            Logger.error('Structure %s is not a known structure'%structure)
+            return None
+        try:
+            prepared_kwargs = self._prepare_kwargs(structure_parser, **kwargs)
+        except Exception as e:
+            Logger.error('Failed to parse provided kwargs for structure %s (%s)'%(structure, str(e)))
+            return None
+        original_position = stream.tell()
+        try:
+            return structure_parser(original_position, *args, stream=stream, **prepared_kwargs)
+        except Exception as e:
+            raise
+            Logger.error('Failed to parse %s structure (%s)'%(structure, str(e)))
+            return None
     def parse(self):
         '''
         Args:
@@ -388,14 +416,14 @@ class Prefetch(BaseItem):
         '''
         self._stream = self.get_stream()
         try:
-            self.header = self.parse_header()
-            self.file_info = self.parse_file_info()
-            self.file_metrics = self.parse_file_metrics()
-            self.filename_strings = self.parse_filename_strings()
-            self.trace_chains = self.parse_trace_chains()
-            self.volumes_info = self.parse_volumes_info()
-            self.file_references = self.parse_file_references()
-            self.directory_strings = self.parse_directory_strings()
+            self.header = self.parse_structure('header')
+            self.file_info = self.parse_structure('file_info')
+            self.file_metrics = self.parse_structure('file_metrics')
+            self.filename_strings = self.parse_structure('filename_strings')
+            self.trace_chains = self.parse_structure('trace_chains')
+            self.volumes_info = self.parse_structure('volumes_info')
+            self.file_references = self.parse_structure('file_references')
+            self.directory_strings = self.parse_structure('directory_strings')
         finally:
             try:
                 self._stream.close()
