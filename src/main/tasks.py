@@ -27,7 +27,6 @@ from os import path, stat
 from datetime import datetime, timezone, timedelta
 from json import dumps
 from construct import Container
-from tqdm import tqdm
 
 from src.parsers.prefetch import Prefetch
 
