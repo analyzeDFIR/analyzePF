@@ -242,9 +242,8 @@ class ParseCSVDirective(BaseParseFileOutputDirective):
             Parse $MFT information to CSV format
             FIELDS: Version Signature ExecutableName PrefetchHash
                     SectionAEntriesCount SectionBEntriesCount SectionCLength SectionDEntriesCount
-                    LastExecutionTime ExecutionCount FileNameStrings
-                    VolumeDevicePath VolumeCreateTime VolumeSerialNumber
-                    FileMetricsCount TraceChainsAccount FileReferenceCount DirectoryStringCount 
+                    LastExecutionTime ExecutionCount VolumeDevicePath VolumeCreateTime VolumeSerialNumber
+                    FileMetricsCount TraceChainsAccount FileReferenceCount DirectoryStringsCount FileNameStrings
         Preconditions:
             @BaseDirective.run_directive
             args.info_type is of type String        (assumed True)

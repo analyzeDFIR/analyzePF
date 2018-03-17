@@ -36,12 +36,11 @@ def addProcessScopedHandler(filename, logger=logging.root, mode='a', encoding='U
         Adds new stream to first ProcessAwareFileHandler encountered in logger.handlers
     Preconditions:
         filename is of type String
-        logger is subclass of logging.Logger
+        logger is subclass of logging.Logger    (assumed True)
         mode is of type String
         encoding is of type String
     '''
     assert isinstance(filename, str), 'Filename is not of type String'
-    assert issubclass(logger, logging.Logger), 'Logger is not a subclass of logging.Logger'
     assert isinstance(mode, str), 'Mode is not of type String'
     assert isinstance(encoding, str), 'Encoding is not of type String'
     for handler in logger.handlers:

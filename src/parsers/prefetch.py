@@ -24,6 +24,7 @@
 from io import BytesIO
 import inspect
 from construct.lib import Container
+from datetime import datetime
 
 from .decompress import DecompressWin10
 import src.structures.prefetch as pfstructs
@@ -41,7 +42,7 @@ class Prefetch(BaseItem):
     filename_strings    = Field(5)
     volumes_info        = Field(6)
     file_references     = Field(7)
-    directory_Strings   = Field(8)
+    directory_strings   = Field(8)
 
     def __init__(self, filepath, load=False):
         super(Prefetch, self).__init__()
@@ -65,7 +66,7 @@ class Prefetch(BaseItem):
             except:
                 version = None
         return version
-    def _clean_transform(self, value):
+    def _clean_transform(self, value, serialize=False):
         '''
         Args:
             value: Any  => value to be converted
@@ -82,10 +83,12 @@ class Prefetch(BaseItem):
                 if key.startswith('Raw'):
                     del cleaned_value[key]
                 else:
-                    cleaned_value[key] = self._clean_transform(cleaned_value[key])
+                    cleaned_value[key] = self._clean_transform(cleaned_value[key], serialize)
             return cleaned_value
         elif isinstance(value, list):
-            return list(map(lambda entry: self._clean_transform(entry), value))
+            return list(map(lambda entry: self._clean_transform(entry, serialize), value))
+        elif isinstance(value, datetime) and serialize:
+            return value.strftime('%Y-%m-%d %H:%M:%S.%f%z')
         else:
             return value
     def _prepare_kwargs(self, structure_parser, **kwargs):
@@ -145,6 +148,17 @@ class Prefetch(BaseItem):
         if persist:
             self._stream = stream
         return stream
+    def serialize(self):
+        '''
+        Args:
+            N/A
+        Returns:
+            Container<String, Any>
+            Serializable representation of self in Container object
+        Preconditions:
+            N/A
+        '''
+        return self._clean_transform(Container(**self), serialize=True)
     def _parse_directory_strings(self, original_position, stream=None, file_info=None, volumes_info=None):
         '''
         Args:
@@ -172,6 +186,7 @@ class Prefetch(BaseItem):
                         directory_string_struct.String = stream.read(directory_string_struct.Length * 2 + 2).decode('UTF16')
                         directory_strings_entry.append(directory_string_struct.String.strip('\x00'))
                     except Exception as e:
+                        raise
                         Logger.error('Error parsing directory strings entry (%s)'%str(e))
                         directory_strings_entry.append(None)
                 directory_strings.append(directory_strings_entry)
@@ -394,6 +409,7 @@ class Prefetch(BaseItem):
         try:
             prepared_kwargs = self._prepare_kwargs(structure_parser, **kwargs)
         except Exception as e:
+            raise
             Logger.error('Failed to parse provided kwargs for structure %s (%s)'%(structure, str(e)))
             return None
         original_position = stream.tell()
@@ -424,6 +440,7 @@ class Prefetch(BaseItem):
             self.volumes_info = self.parse_structure('volumes_info')
             self.file_references = self.parse_structure('file_references')
             self.directory_strings = self.parse_structure('directory_strings')
+            return self
         finally:
             try:
                 self._stream.close()

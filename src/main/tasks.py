@@ -121,14 +121,29 @@ class ParseCSVTask(BaseParseFileOutputTask):
                             if len(pf.file_info.LastExecutionTime) > 0 and pf.file_info.LastExecutionTime[0] is not None \
                             else self.NULL,
                         str(pf.file_info.ExecutionCount),
-                        '|'.join(str(fstring) for fstring in pf.filename_strings),
-                        pf.volumes_info.VolumeDevicePath if hasattr(pf.volumes_info, 'VolumeDevicePath') else self.NULL,
-                        pf.volumes_info.VolumeCreateTime.strftime('%Y-%m-%d %H:%M:%S.%f%z'),
-                        str(pf.volumes_info.VolumeSerialNumber)\
+                        '|'.join([\
+                            volumes_info_entry.VolumeDevicePath \
+                            if hasattr(volumes_info_entry, 'VolumeDevicePath') else self.NULL \
+                            for volumes_info_entry in pf.volumes_info\
+                        ]),
+                        '|'.join([\
+                            volumes_info_entry.VolumeCreateTime.strftime('%Y-%m-%d %H:%M:%S.%f%z') \
+                            if hasattr(volumes_info_entry, 'VolumeCreateTime') else self.NULL \
+                            for volumes_info_entry in pf.volumes_info\
+                        ]),
+                        '|'.join([\
+                            str(volumes_info_entry.VolumeSerialNumber) \
+                            if hasattr(volumes_info_entry, 'VolumeSerialNumber') else self.NULL \
+                            for volumes_info_entry in pf.volumes_info\
+                        ])\
                     ]
-                    for attribute_key in ['file_metrics', 'trace_chains', 'file_references', 'directory_strings']:
+                    for attribute_key in ['file_metrics', 'trace_chains']:
                         attribute = getattr(pf, attribute_key)
                         result.append(str(len(attribute)) if attribute is not None else self.NULL)
+                    for attribute_key in ['file_references', 'directory_strings']:
+                        attribute = getattr(pf, attribute_key)
+                        result.append('|'.join(str(len(attribute_entry)) for attribute_entry in attribute)) 
+                    result.append('|'.join(str(fstring) for fstring in pf.filename_strings))
                     result_set.append(result)
                 except Exception as e:
                     Logger.error('Failed to create CSV output record (%s)'%str(e))
@@ -197,12 +212,7 @@ class ParseJSONTask(BaseParseFileOutputTask):
         '''
         result_set = list()
         try:
-            pf.parse()
-            for idx in range(len(pf.file_info.LastExecutionTime)):
-                pf.file_info.LastExecutionTime[idx] = pf.file_info.LastExecutionTime[idx].strftime('%Y-%m-%d %H:%M:%S.%f%z')
-            pf.volumes_info.VolumeCreateTime = pf.volumes_info.VolumeCreateTime.strftime('%Y-%m-%d %H:%M:%S.%f%z')
-            serializable_entry = Container(**pf)
-            result = dumps(serializable_entry, sort_keys=True, indent=(2 if self.pretty else None))
+            result = dumps(pf.parse().serialize(), sort_keys=True, indent=(2 if self.pretty else None))
         except Exception as e:
             Logger.error('Failed to parse Prefetch file %s (%s)'%(self.filepath, str(e)))
         else:
