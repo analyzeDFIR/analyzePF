@@ -116,6 +116,7 @@ def initialize_parser():
 
     # Database parse directive
     db_parse_directive = parse_subdirectives.add_parser('db', parents=[base_parent, db_connect_parent], help='Parse prefetch file to database')
+    db_parse_directive.set_defaults(func=DirectiveRegistry.retrieve('ParseDBDirective'))
 
     ## Convert directives
     convert_directives = main_directives.add_parser('convert', help='Parsed prefetch file output conversion directives')

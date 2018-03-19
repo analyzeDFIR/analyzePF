@@ -23,9 +23,9 @@
 
 from datetime import datetime
 from sqlalchemy.orm import relationship
-from sqlalchemy.types import String, Text, Integer, BigInteger
+from sqlalchemy.types import String, Text, Integer, BigInteger, Boolean
 from sqlalchemy import Column, ForeignKey, Index, text
-from sqlalchemy.schema import UniqueConstraint, DDL
+from sqlalchemy.schema import UniqueConstraint, CheckConstraint, DDL
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 
 from src.utils.database import TimestampDefaultExpression, create_view 
@@ -77,13 +77,47 @@ class ConcreteTableMixin(ViewMixin):
     id          = Column(BigInteger, primary_key=True)
     created_at  = Column(TIMESTAMP(timezone=True), server_default=TimestampDefaultExpression(), index=True)
 
+class MetadataLinkedMixin(object):
+    '''
+    Mixin for tables linked to metadata table
+    metadata table serves as accounting system for parser
+    '''
+    meta_id               = Column(BigInteger, ForeignKey('metadata.id', ondelete='CASCADE', onupdate='CASCADE'), nullable=False, index=True)
+
 class HeaderLinkedMixin(object):
     '''
-    Mixin for tables linked to prefetch file header
+    Mixin for tables linked to header table
     '''
     header_id               = Column(BigInteger, ForeignKey('header.id', ondelete='CASCADE', onupdate='CASCADE'), nullable=False, index=True)
 
-class Header(BaseTable, ConcreteTableMixin):
+class FileMetricsLinkedMixin(obejct):
+    '''
+    Mixin for tables linked to filemetrics table
+    '''
+    file_metrics_id         = Column(BigInteger, ForeignKey('filemetrics.id', ondelete='CASCADE', onupdate='CASCADE'), nullable=False, index=True)
+
+class VolumesInfoLinkedMixin(obejct):
+    '''
+    Mixin for tables linked to volumesinformation table
+    '''
+    volumes_info_id         = Column(BigInteger, ForeignKey('volumesinformation.id', ondelete='CASCADE', onupdate='CASCADE'), nullable=False, index=True)
+
+class Metadata(BaseTable, ConcreteTableMixin):
+    '''
+    Parsed prefetch file metadata table
+    '''
+    file_name               = Column(String().with_variant(Text, 'postgresql'), nullable=False)
+    file_path               = Column(String().with_variant(Text, 'postgresql'), nullable=False)
+    file_size               = Column(BigInteger, nullable=False)
+    md5hash                 = Column(String().with_variant(Text, 'postgresql'), nullable=False)
+    sha1hash                = Column(String().with_variant(Text, 'postgresql'), nullable=False)
+    sha2hash                = Column(String().with_variant(Text, 'postgresql'), nullable=False)
+    modify_time             = Column(TIMESTAMP(timezone=True))
+    access_time             = Column(TIMESTAMP(timezone=True))
+    create_time             = Column(TIMESTAMP(timezone=True))
+    completed               = Column(Boolean, index=True)
+
+class Header(BaseTable, ConcreteTableMixin, MetadataLinkedMixin):
     '''
     Prefetch file header table
     '''
@@ -107,7 +141,7 @@ class FileInformation(BaseTable, ConcreteTableMixin, HeaderLinkedMixin):
     section_d_length        = Column(Integer, nullable=False)
     execution_count         = Column(Integer, nullable=False)
 
-class LastExecutionTime(BaseTable, ConcreteTableMixin, HeaderLinkedMixin):
+class LastExecutionTime(BaseTable, ConcreteTableMixin):
     '''
     Prefetch file last execution times from file information block
     '''
@@ -124,11 +158,10 @@ class FileMetrics(BaseTable, ConcreteTableMixin, HeaderLinkedMixin):
     file_name_offset        = Column(BigInteger, nullable=False)
     file_name_length        = Column(Integer, nullable=False)
 
-class FileMetricsNames(BaseTable, ConcreteTableMixin, HeaderLinkedMixin):
+class FileMetricsNames(BaseTable, ConcreteTableMixin, FileMetricsLinkedMixin):
     '''
     Prefetch file metrics entry file name table
     '''
-    file_metrics_id         = Column(BigInteger, ForeignKey('filemetrics.id', ondelete='CASCADE', onupdate='CASCADE'), nullable=False, index=True)
     file_name               = Column(String().with_variant(Text, 'postgresql'))
 
 class TraceChains(BaseTable, ConcreteTableMixin, HeaderLinkedMixin):
@@ -152,18 +185,20 @@ class VolumesInformation(BaseTable, ConcreteTableMixin, HeaderLinkedMixin):
     section_f_offset            = Column(Integer, nullable=False)
     section_f_strings_count     = Column(Integer, nullable=False)
 
-class FileReferences(BaseTable, ConcreteTableMixin, HeaderLinkedMixin):
+class FileReferences(BaseTable, ConcreteTableMixin):
     '''
     Prefetch file references table
     '''
     file_metrics_id         = Column(BigInteger, ForeignKey('filemetrics.id', ondelete='CASCADE', onupdate='CASCADE'), nullable=True, index=True)
-    volume_info_id          = Column(BigInteger, ForeignKey('volumesinformation.id', ondelete='CASCADE', onupdate='CASCADE'), nullable=True, index=True)
+    volumes_info_id         = Column(BigInteger, ForeignKey('volumesinformation.id', ondelete='CASCADE', onupdate='CASCADE'), nullable=True, index=True)
     segment_number          = Column(Integer, nullable=False)
     sequence_number         = Column(Integer, nullable=False)
+    __table_args__ = (\
+        CheckConstraint('file_metrics_id IS NOT NULL OR volumes_info_id IS NOT NULL'),
+    )
 
-class DirectoryStrings(BaseTable, ConcreteTableMixin, HeaderLinkedMixin):
+class DirectoryStrings(BaseTable, ConcreteTableMixin, VolumesInfoLinkedMixin):
     '''
     Prefetch file directory strings table
     '''
-    length                  = Column(Integer)
-    string                  = Column(String().with_variant(Text, 'postgresql'), index=True)
+    string                  = Column(String().with_variant(Text, 'postgresql'))

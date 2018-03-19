@@ -235,11 +235,11 @@ class ParseCSVDirective(BaseParseFileOutputDirective):
         Args:
             @BaseDirective.run_directive
             args.info_type: String      => type of information to extract
-            args.sources: List<String>  => list of $MFT file(s) to parse
+            args.sources: List<String>  => list of Prefetch file(s) to parse
             args.target: String         => path to output file
             args.sep: String            => separator to use in output file
         Procedure:
-            Parse $MFT information to CSV format
+            Parse Prefetch information to CSV format
             FIELDS: Version Signature ExecutableName PrefetchHash
                     SectionAEntriesCount SectionBEntriesCount SectionCLength SectionDEntriesCount
                     LastExecutionTime ExecutionCount VolumeDevicePath VolumeCreateTime VolumeSerialNumber
@@ -277,11 +277,11 @@ class ParseBODYDirective(BaseParseFileOutputDirective):
         '''
         Args:
             @BaseDirective.run_directive
-            args.sources: List<String>  => list of $MFT file(s) to parse
+            args.sources: List<String>  => list of Prefetch file(s) to parse
             args.target: String         => path to output file
             args.sep: String            => separator to use in output file
         Procedure:
-            Parse $MFT information to BODY format
+            Parse Prefetch information to BODY format
             FIELDS: nodeidx|recordidx|MD5|name|inode|mode_as_string|UID|GID|size|atime|mtime|ctime|crtime
         Preconditions:
             @BaseDirective.run_directive
@@ -314,11 +314,11 @@ class ParseJSONDirective(BaseParseFileOutputDirective):
         '''
         Args:
             @BaseDirective.run_directive
-            args.sources: List<String>  => list of $MFT file(s) to parse
+            args.sources: List<String>  => list of Prefetch file(s) to parse
             args.target: String         => path to output file
             args.pretty                 => whether to pretty print JSON output
         Procedure:
-            Parse $MFT information to JSON format
+            Parse Prefetch information to JSON format
         Preconditions:
             @BaseDirective.run_directive
             args.sources is of type List<String>    (assumed True)
@@ -331,4 +331,8 @@ class ParseJSONDirective(BaseParseFileOutputDirective):
 class ParseDBDirective(BaseDirective):
     '''
     '''
-    pass
+    @classmethod
+    def run(cls, args):
+        '''
+        '''
+        pass
