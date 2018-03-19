@@ -26,7 +26,6 @@ from os import path
 from argparse import ArgumentParser, ArgumentTypeError
 
 from src.main.directives import DirectiveRegistry
-from src.utils.parallel import CPU_COUNT
 
 def DBConnectConfig(arg):
     '''
@@ -68,7 +67,7 @@ def initialize_parser():
     base_parent.add_argument('--lpath', type=str, default=path.abspath(path.dirname(sys.argv[0])), help='Path to log file directory (i.e. /path/to/logs or C:\\Users\\<user>\\Documents\\)', dest='log_path')
     base_parent.add_argument('--lpref', type=str, default=None, help='Prefix for log file (default: apf_<date>)', dest='log_prefix')
     base_parent.add_argument('-s', '--source', action='append', help='Path to input file(s)', dest='sources')
-    base_parent.add_argument('--threads', default=(2 if CPU_COUNT <= 4 else 4), type=int, help='Number of threads to use', dest='threads')
+    base_parent.add_argument('--threads', type=int, default=1, help='Number of threads to use', dest='threads')
 
     ## Base output parent
     base_output_parent = ArgumentParser(add_help=False)
@@ -85,12 +84,12 @@ def initialize_parser():
     ## DB connect parent parser
     db_connect_parent = ArgumentParser(add_help=False)
     db_connect_parent.add_argument('-d', '--driver', type=str, default='sqlite', help='Database driver to use (default: sqlite)', dest='db_driver')
-    db_connect_parent.add_argument('-n', '--db', type=str, required=True, help='Name of database to connect to', dest='db_name')
+    db_connect_parent.add_argument('-n', '--db', type=str, required=True, help='Name of database to connect to (path to database if using sqlite)', dest='db_name')
     db_connect_parent.add_argument('-C', '--connect', type=DBConnectConfig, help='Database connection string, or filepath to file containing connection string', dest='db_conn_string')
     db_connect_parent.add_argument('-u', '--user', type=str, help='Name of database user (alternative to connection string)', dest='db_user')
     db_connect_parent.add_argument('-p', '--passwd', type=str, help='Database user password (alternative to connection string)', dest='db_passwd')
     db_connect_parent.add_argument('-H', '--host', type=str, default='localhost', help='Hostname or IP address of database (alternative to connection string)', dest='db_host')
-    db_connect_parent.add_argument('-P', '--port', type=str, help='Port database is listening on (alternative to connection string)', dest='db_host')
+    db_connect_parent.add_argument('-P', '--port', type=str, help='Port database is listening on (alternative to connection string)', dest='db_port')
 
     ## Parse directives
     parse_directive = main_directives.add_parser('parse', help='prefetch file parser directives')
