@@ -127,7 +127,7 @@ class BaseDirective(object, metaclass=DirectiveRegistry):
         Logger.info('END: %s'%cls.__name__)
         logging.shutdown()
         log_path = synthesize_log_path(args.log_path, args.log_prefix)
-        parallel.coalesce_files(path.join(args.log_path, '*_tmp_amft.log'), log_path)
+        parallel.coalesce_files(path.join(args.log_path, '*_tmp_apf.log'), log_path)
 
     def __init__(self, args):
         self.run_directive(args)
