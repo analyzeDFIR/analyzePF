@@ -170,6 +170,7 @@ class WorkerPool(object):
         Args:
             N/A
         Returns:
+            JoinableQueue
             Underlying queue of worker pool
         Preconditions:
             N/A
@@ -181,6 +182,7 @@ class WorkerPool(object):
         Args:
             N/A
         Returns:
+            Dict<String, Any>
             Arguments to be applied to all workers in pool
         Preconditions:
             N/A
@@ -194,9 +196,9 @@ class WorkerPool(object):
         Procedure:
             Sets arguments to be applied to all workers in pool
         Preconditions:
-            value is of type dict
+            value is of type Dict<String, Any>
         '''
-        assert isinstance(value, dict), 'Value is not of type dict'
+        assert isinstance(value, dict), 'Value is not of type Dict<String, Any>'
         self._worker_kwargs = value
     @property
     def task_kwargs(self):
@@ -204,6 +206,7 @@ class WorkerPool(object):
         Args:
             N/A
         Returns:
+            Dict<String, Any>
             Arguments to be applied to all tasks supplied to workers
         Preconditions:
             N/A
@@ -217,9 +220,9 @@ class WorkerPool(object):
         Procedure:
             Sets arguments to be applied to all tasks supplied to workers
         Preconditions:
-            value is of type dict
+            value is of type Dict<String, Any>
         '''
-        assert isinstance(value, dict), 'Value is not of type dict'
+        assert isinstance(value, dict), 'Value is not of type Dict<String, Any>'
         self._task_kwargs = value
     def add_task(self, *args, poison_pill=False, **kwargs):
         '''
@@ -235,7 +238,6 @@ class WorkerPool(object):
         task_args.update(self._task_kwargs)
         task = self._task_class(*args, **task_args) if not poison_pill else None
         getattr(self._queue, action)(task)
-        return True
     def add_poison_pills(self):
         '''
         Args:
@@ -247,7 +249,6 @@ class WorkerPool(object):
         '''
         for i in range(self.worker_count):
             self.add_task(poison_pill=True)
-        return True
     def initialize_workers(self):
         '''
         Args:
@@ -261,7 +262,6 @@ class WorkerPool(object):
             self._worker_class(self._queue, i, **self._worker_kwargs)\
             for i in range(self.worker_count)\
         ]
-        return True
     def start(self):
         '''
         Args:
@@ -277,7 +277,6 @@ class WorkerPool(object):
             if not worker.is_alive():
                 worker.daemon = self.daemon
                 worker.start()
-        return True
     def join_tasks(self):
         '''
         Args:
@@ -289,7 +288,6 @@ class WorkerPool(object):
         '''
         if hasattr(self._queue, 'join') and callable(self._queue.join):
             self._queue.join()
-        return True
     def join_workers(self):
         '''
         Args:
@@ -303,7 +301,6 @@ class WorkerPool(object):
             for worker in self._workers:
                 if worker.is_alive():
                     worker.join()
-        return True
     def terminate(self):
         '''
         Args:
@@ -317,7 +314,6 @@ class WorkerPool(object):
             for worker in self._workers:
                 if worker.is_alive():
                     worker.terminate()
-        return True
     def refresh(self):
         '''
         Args:
@@ -327,6 +323,5 @@ class WorkerPool(object):
         Preconditions:
             All worker processes have been killed
         '''
-        #self.terminate()
         self._workers = None
         self.initialize_workers()

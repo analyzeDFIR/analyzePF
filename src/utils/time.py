@@ -56,6 +56,7 @@ class WindowsTime(object):
         Args:
             N/A
         Returns:
+            DateTime
             Python DateTime object of converted MFTFILETIME if no error thrown,
             None otherwise
         Preconditions:

@@ -80,14 +80,6 @@ PrefetchFileReferences = Struct(
 )
 
 '''
-Prefetch Directory String: prefetch file directory string
-    **TODO
-'''
-PrefetchDirectoryString = Struct(
-    'Length'                / Int16ul
-)
-
-'''
 Prefetch File Information: metadata about information stored in prefetch file
     Section A: File metrics array
     Section B: Trace chains array
@@ -129,6 +121,17 @@ PrefetchFileMetricsEntry17 = Struct(
 
 '''
 Prefetch Volume Information: information about volume executable was sourced from
+    VolumeDevicePathOffset: offset to volume device path in bytes (relative to
+                            beginning of volumes information section)
+    VolumeDevicePathLength: length of volume device path (in UTF16le)
+    RawVolumeCreateTime: FILETIME object containing volume creation time
+    VolumeSerialNumber: volume serial number taken from volume string
+    SectionEOffset: offset to file references section in bytes (relative to
+                    beginning of volumes information section)
+    SectionELength: length of file references section
+    SectionFOffset: offset to directory strings section in bytes (relative to
+                    beginning of volumes information section)
+    SectionFStringsCount: number of strings in directory strings section
 '''
 PrefetchVolumeInformation17 = Struct(
     'VolumeDevicePathOffset'    / Int32ul,
@@ -142,6 +145,9 @@ PrefetchVolumeInformation17 = Struct(
     Padding(4)
 )
 
+'''
+@PrefetchFileInformation17
+'''
 PrefetchFileInformation23 = Struct(
     'SectionAOffset'        / Int32ul,
     'SectionAEntriesCount'  / Int32ul,
@@ -159,6 +165,11 @@ PrefetchFileInformation23 = Struct(
     Padding(84)
 )
 
+'''
+@PrefetchFileMetricsEntry17
+    AverageDuration: potentially the average duration in milliseconds
+    FileReference: reference to file in MFT that the metrics are associated with
+'''
 PrefetchFileMetricsEntry23 = Struct(
     'StartTime'             / Int32ul,
     'Duration'              / Int32ul,
@@ -169,6 +180,9 @@ PrefetchFileMetricsEntry23 = Struct(
     'FileReference'         / NTFSFileReference
 )
 
+'''
+@PrefetchVolumeInformation17
+'''
 PrefetchVolumeInformation23 = Struct(
     'VolumeDevicePathOffset'    / Int32ul,
     'VolumeDevicePathLength'    / Int32ul,
@@ -181,6 +195,9 @@ PrefetchVolumeInformation23 = Struct(
     Padding(68)
 )
 
+'''
+@PrefetchFileInformation17
+'''
 PrefetchFileInformation26 = Struct(
     'SectionAOffset'        / Int32ul,
     'SectionAEntriesCount'  / Int32ul,
@@ -206,6 +223,9 @@ PrefetchFileInformation30 = PrefetchFileInformation26
 
 PrefetchFileMetricsEntry30 = PrefetchFileMetricsEntry26
 
+'''
+@PrefetchVolumeInformation17
+'''
 PrefetchVolumeInformation30 = Struct(
     'VolumeDevicePathOffset'    / Int32ul,
     'VolumeDevicePathLength'    / Int32ul,

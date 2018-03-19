@@ -24,11 +24,20 @@
 from src.utils.time import WindowsTime
 from construct import *
 
+'''
+For a good discussion of FILETIME objects and filesystem time accounting,
+see https://msdn.microsoft.com/en-us/library/windows/desktop/ms724284(v=vs.85).aspx
+'''
 NTFSFILETIME = Struct(
     'dwLowDateTime'     / Int32ul,
     'dwHighDateTime'    / Int32ul
 )
 
+'''
+Is actually a MFT_SEGMENT_REFERENCE structure,
+see https://msdn.microsoft.com/en-us/library/bb470211(v=vs.85).aspx
+for a discussion of this structure
+'''
 NTFSFileReference = Struct(
     'SegmentNumber'     / Int32ul,
     Padding(2),

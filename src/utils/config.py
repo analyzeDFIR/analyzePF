@@ -32,7 +32,8 @@ from src.main.exceptions import PathInitializationError
 LOGGING_DEFAULTS = dict(\
     format='%(asctime)s.%(msecs)s\t%(levelname)s\t%(name)s\t%(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
-    level=logging.INFO)
+    level=logging.INFO\
+)
 
 def initialize_paths():
     '''
@@ -59,14 +60,23 @@ def initialize_paths():
 
 def synthesize_log_path(log_path, log_prefix=None):
     '''
+    Args:
+        log_path: String    => valid path to output log to
+        log_prefix: String  => prefix to log file
+    Returns:
+        String
+        Full log path given a path (parent directory) and prefix
+    Preconditions:
+        log_path is of type String
+        log_prefix is of type String
     '''
     assert isinstance(log_path, str) and path.exists(log_path), 'Log_path is not a valid path'
     assert isinstance(log_prefix, (type(None), str)), 'Log_prefix is not of type String'
     if log_prefix is None:
-        log_prefix = 'amft_' + datetime.utcnow().strftime('%Y%m%d')
+        log_prefix = 'apf_' + datetime.utcnow().strftime('%Y%m%d')
     return path.join(path.abspath(log_path), log_prefix + '.log')
 
-def initialize_logger(log_path, log_prefix='main_tmp_amft', format=LOGGING_DEFAULTS.get('format'), datefmt=LOGGING_DEFAULTS.get('datefmt'), level=LOGGING_DEFAULTS.get('level')):
+def initialize_logger(log_path, log_prefix='main_tmp_apf', format=LOGGING_DEFAULTS.get('format'), datefmt=LOGGING_DEFAULTS.get('datefmt'), level=LOGGING_DEFAULTS.get('level')):
     '''
     Args:
         log_path: String    => valid path to output log to

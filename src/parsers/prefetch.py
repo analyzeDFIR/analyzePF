@@ -182,9 +182,9 @@ class Prefetch(BaseItem):
                 stream.seek(file_info.SectionDOffset + volumes_info_entry.SectionFOffset)
                 for i in range(volumes_info_entry.SectionFStringsCount):
                     try:
-                        directory_string_struct = pfstructs.PrefetchDirectoryString.parse_stream(stream)
-                        directory_string_struct.String = stream.read(directory_string_struct.Length * 2 + 2).decode('UTF16')
-                        directory_strings_entry.append(directory_string_struct.String.strip('\x00'))
+                        directory_string_length = pfstructs.Int16ul.parse_stream(stream)
+                        directory_string = stream.read(directory_string_length * 2 + 2).decode('UTF16')
+                        directory_strings_entry.append(directory_string.strip('\x00'))
                     except Exception as e:
                         raise
                         Logger.error('Error parsing directory strings entry (%s)'%str(e))
