@@ -21,6 +21,9 @@
 ## OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 
+import logging
+Logger = logging.getLogger(__name__)
+from os import path, stat
 from io import BytesIO
 import inspect
 from construct.lib import Container
@@ -132,33 +135,6 @@ class Prefetch(BaseItem):
                     None\
                 )
         return prepared_kwargs
-    def get_stream(self, persist=False):
-        '''
-        Args:
-            persist: Boolean    => whether to persist stream as attribute on self
-        Returns:
-            TextIOWrapper|BytesIO
-            Stream of prefetch file at self.filepath
-        Preconditions:
-            persist is of type Boolean  (assumed True)
-        '''
-        stream = open(self.filepath, 'rb') \
-            if self._get_version() is not None \
-            else BytesIO(DecompressWin10().decompress(self.filepath))
-        if persist:
-            self._stream = stream
-        return stream
-    def serialize(self):
-        '''
-        Args:
-            N/A
-        Returns:
-            Container<String, Any>
-            Serializable representation of self in Container object
-        Preconditions:
-            N/A
-        '''
-        return self._clean_transform(Container(**self), serialize=True)
     def _parse_directory_strings(self, original_position, stream=None, file_info=None, volumes_info=None):
         '''
         Args:
@@ -186,7 +162,6 @@ class Prefetch(BaseItem):
                         directory_string = stream.read(directory_string_length * 2 + 2).decode('UTF16')
                         directory_strings_entry.append(directory_string.strip('\x00'))
                     except Exception as e:
-                        raise
                         Logger.error('Error parsing directory strings entry (%s)'%str(e))
                         directory_strings_entry.append(None)
                 directory_strings.append(directory_strings_entry)
@@ -397,6 +372,88 @@ class Prefetch(BaseItem):
         header.ExecutableName = header.RawExecutableName.split('\x00')[0]
         header.PrefetchHash = hex(header.RawPrefetchHash).replace('0x', '').upper()
         return self._clean_transform(header)
+    def _hash_file(self, algorithm):
+        '''
+        Args:
+            algorithm: String   => hash algorithm to use
+        Returns:
+            String
+            Hex digest of hash of prefetch file
+        Preconditions:
+            algorithm is of type String
+        '''
+        try:
+            hash = getattr(hashlib, algorithm)()
+        except Exception as e:
+            Logger.error('Unable to obtain %s hash of prefetch file (%s)'%(algorithm, str(e)))
+            return None
+        else:
+            with open(self.filepath, 'rb') as pf:
+                buffer = pf.read(1024)
+                while len(buffer) > 0:
+                    hash.update(buffer)
+                    buffer = pf.read(1024)
+            return hash.hexdigest()
+    def get_metadata(self, simple_hash=True):
+        '''
+        Args:
+            simple_hash: Boolean    => whether to only collect SHA256 hash or 
+                                       MD5 and SHA1 as well
+        Returns:
+            Container<String, Any>
+            Container of metadata about this prefetch file:
+                file_name: prefetch file name
+                file_path: full path on local system
+                file_size: size of file on local system
+                md5hash: MD5 hash of prefetch file
+                sha1hash: SHA1 hash of prefetch file
+                sha2hash: SHA256 hash of prefetch file
+                modify_time: last modification time of prefetch file on local system
+                access_time: last access time of prefetch file on local system
+                create_time: create time of prefetch file on local system
+        Preconditions:
+            simple_hash is of type Boolean
+        '''
+        assert isinstance(simple_hash, bool), 'Simple_hash is of type Boolean'
+        pf_stat = stat(self.filepath)
+        return Container(\
+            file_name=path.basename(self.filepath),
+            file_path=path.abspath(self.filepath),
+            file_size=path.getsize(self.filepath),
+            md5hash=self._hash_file('md5') if not simple_hash else None,
+            sha1hash=self._hash_file('sha1') if not simple_hash else None,
+            sha2hash=self._hash_file('sha256'),
+            modify_time=pf_stat.st_mtime,
+            access_time=pf_stat.st_atime,
+            create_time=pf_stat.st_ctime\
+        )
+    def get_stream(self, persist=False):
+        '''
+        Args:
+            persist: Boolean    => whether to persist stream as attribute on self
+        Returns:
+            TextIOWrapper|BytesIO
+            Stream of prefetch file at self.filepath
+        Preconditions:
+            persist is of type Boolean  (assumed True)
+        '''
+        stream = open(self.filepath, 'rb') \
+            if self._get_version() is not None \
+            else BytesIO(DecompressWin10().decompress(self.filepath))
+        if persist:
+            self._stream = stream
+        return stream
+    def serialize(self):
+        '''
+        Args:
+            N/A
+        Returns:
+            Container<String, Any>
+            Serializable representation of self in Container object
+        Preconditions:
+            N/A
+        '''
+        return self._clean_transform(Container(**self), serialize=True)
     def parse_structure(self, structure, *args, stream=None, **kwargs):
         '''
         '''
@@ -409,14 +466,12 @@ class Prefetch(BaseItem):
         try:
             prepared_kwargs = self._prepare_kwargs(structure_parser, **kwargs)
         except Exception as e:
-            raise
             Logger.error('Failed to parse provided kwargs for structure %s (%s)'%(structure, str(e)))
             return None
         original_position = stream.tell()
         try:
             return structure_parser(original_position, *args, stream=stream, **prepared_kwargs)
         except Exception as e:
-            raise
             Logger.error('Failed to parse %s structure (%s)'%(structure, str(e)))
             return None
     def parse(self):

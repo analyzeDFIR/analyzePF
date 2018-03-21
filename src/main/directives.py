@@ -338,9 +338,9 @@ class ParseDBDirective(BaseDirective):
         '''
         Args:
             @BaseDirective.run_directive
-            args.driver: String         => database driver to use
+            args.db_driver: String      => database db_driver to use
             args.db_name: String        => name of database to connect to
-            args.conn_string: String    => database connection string
+            args.db_conn_string: String => database connection string
             args.db_user: String        => name of database user
             args.db_passwd: String      => password of database user
             args.db_host: String        => hostname (IP address) of database
@@ -349,20 +349,20 @@ class ParseDBDirective(BaseDirective):
             Parse Prefetch information to database
         Preconditions:
             @BaseDirective.run_directive
-            args.driver is of type String
+            args.db_driver is of type String
             args.db_name is of type String
-            args.conn_string is of type String
+            args.db_conn_string is of type String
             args.db_user is of type String
             args.db_passwd is of type String
             args.db_host is of type String
             args.db_port is of type String
             one of the following conditions must be true:
-                1) driver is sqlite and args.db_name is a valid path
-                2) args.conn_string is not None and is valid connection string 
+                1) db_driver is sqlite and args.db_name is a valid path
+                2) args.db_conn_string is not None and is valid connection string 
                 3) args.db_user, args.db_passwd, args.db_host, and args.db_port are not None
         '''
-        assert (args.driver == 'sqlite' and path.exists(path.abspath(path.dirname(args.db_name)))) or \
-            args.conn_string is not None or \
+        assert (args.db_driver == 'sqlite' and path.exists(path.dirname(args.db_name))) or \
+            args.db_conn_string is not None or \
             (args.db_user is not None and args.db_passwd is not None \
             and args.db_host is not None and args.db_port is not None), 'Received invalid database config'
-        pass
+        print(args)
