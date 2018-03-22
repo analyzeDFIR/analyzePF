@@ -41,10 +41,10 @@ class BaseParseTask(object):
         self.filepath = filepath
         for kwarg in kwargs:
             setattr(self, kwarg, kwargs[kwarg])
-    def __call__(self, worker_name):
+    def __call__(self, worker):
         pf = Prefetch(self.filepath)
         result_set = self._get_resultset(pf)
-        self._handle_resultset(result_set, worker_name)
+        self._handle_resultset(result_set, worker)
         return True
 
 class BaseParseFileOutputTask(BaseParseTask):
@@ -64,19 +64,19 @@ class BaseParseFileOutputTask(BaseParseTask):
             pf is of type Prefetch  (assumed True)
         '''
         raise NotImplementedError('method _get_resultset not implemented for %s'%type(self).__name__)
-    def _handle_resultset(self, result_set, worker_name):
+    def _handle_resultset(self, result_set, worker):
         '''
         Args:
             result_set: List<List<Any>> => list of results to write to output file
-            worker_name: String         => name of worker process handling task
+            worker: BaseQueueWorker     => worker object that called task
         Procedure:
             Attempt to write each result in result set to the output file,
             logging any errors that occur
         Preconditions:
             result_set is of type List<List<Any>>   (assumed True)
-            worker_name is of type String           (assumed True)
+            worker is subclass of BaseQueueWorker   (assumed True)
         '''
-        target_file = path.join(self.target, '%s_tmp_amft.out'%worker_name)
+        target_file = path.join(self.target, '%s_tmp_apf.out'%worker.name)
         try:
             if len(result_set) > 0:
                 with open(target_file, 'a') as f:

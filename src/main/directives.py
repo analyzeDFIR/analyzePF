@@ -209,7 +209,7 @@ class BaseParseFileOutputDirective(BaseDirective):
             progress_pool.join_workers()
             worker_pool.add_poison_pills()
             worker_pool.join_workers()
-            parallel.coalesce_files(path.join(args.target_parent, '*_tmp_amft.out'), args.target)
+            parallel.coalesce_files(path.join(args.target_parent, '*_tmp_apf.out'), args.target)
 
 class ParseCSVDirective(BaseParseFileOutputDirective):
     '''
