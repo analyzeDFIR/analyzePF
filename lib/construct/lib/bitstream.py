@@ -4,7 +4,6 @@ from sys import maxsize
 
 
 class RestreamedBytesIO(object):
-    __slots__ = ["substream", "decoder", "decoderunit", "encoder", "encoderunit", "rbuffer", "wbuffer", "sincereadwritten"]
 
     def __init__(self, substream, decoder, decoderunit, encoder, encoderunit):
         self.substream = substream
@@ -22,7 +21,8 @@ class RestreamedBytesIO(object):
         while len(self.rbuffer) < count:
             data = self.substream.read(self.decoderunit)
             if data is None or len(data) == 0:
-                raise IOError("Restreamed cannot satisfy read request of %d bytes" % (count,))
+                # Restreamed cannot satisfy read request
+                return ""
             self.rbuffer += self.decoder(data)
         data, self.rbuffer = self.rbuffer[:count], self.rbuffer[count:]
         self.sincereadwritten += count
@@ -43,6 +43,9 @@ class RestreamedBytesIO(object):
         if len(self.wbuffer):
             raise ValueError("closing stream but %d unwritten bytes remain, %d is encoded unit" % (len(self.wbuffer), self.encoderunit))
 
+    def seek(self, at, whence=0):
+        raise IOError
+
     def seekable(self):
         return False
 
@@ -55,7 +58,6 @@ class RestreamedBytesIO(object):
 
 
 class RebufferedBytesIO(object):
-    __slots__ = ["substream", "offset", "rwbuffer", "moved", "tailcutoff"]
 
     def __init__(self, substream, tailcutoff=None):
         self.substream = substream

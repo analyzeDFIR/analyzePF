@@ -75,7 +75,9 @@ class Prefetch(Container):
         '''
         if issubclass(type(value), Container):
             cleaned_value = Container(value)
-            for key in cleaned_value.keys():
+            if '_filepath' in cleaned_value:
+                del cleaned_value['_filepath']
+            for key in cleaned_value:
                 if key.startswith('Raw') or key.startswith('_'):
                     del cleaned_value[key]
                 else:
@@ -223,7 +225,7 @@ class Prefetch(Container):
                 volumes_info_position = stream.tell()
                 volumes_info_entry.VolumeCreateTime = WindowsTime(volumes_info_entry.RawVolumeCreateTime).parse()
                 stream.seek(file_info.SectionDOffset + volumes_info_entry.VolumeDevicePathOffset)
-                volumes_info_entry.VolumeDevicePath = pfstructs.String(\
+                volumes_info_entry.VolumeDevicePath = pfstructs.PaddedString(\
                         volumes_info_entry.VolumeDevicePathLength, \
                         encoding='utf8').parse(\
                             stream.read(volumes_info_entry.VolumeDevicePathLength*2).replace(b'\x00', b'')\
@@ -446,7 +448,7 @@ class Prefetch(Container):
         Preconditions:
             N/A
         '''
-        return self._clean_transform(Container(**self), serialize=True)
+        return self._clean_transform(self, serialize=True)
     def parse_structure(self, structure, *args, stream=None, **kwargs):
         '''
         '''

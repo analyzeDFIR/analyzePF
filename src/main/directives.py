@@ -404,6 +404,7 @@ class ParseDBDirective(BaseDirective):
                     worker_class=parallel.DBProgressTrackerWorker,
                     worker_count=1,
                     worker_kwargs=dict(\
+                        log_path=args.log_path,
                         pcount=frontier_count,
                         pdesc='Total',
                         punit='files',
@@ -416,7 +417,7 @@ class ParseDBDirective(BaseDirective):
                     daemonize=False, 
                     worker_count=args.threads,
                     worker_kwargs=dict(\
-                        result_queue=progress_pool.result_queue, 
+                        result_queue=progress_pool.queue, 
                         log_path=args.log_path\
                     )
                 )
@@ -424,7 +425,7 @@ class ParseDBDirective(BaseDirective):
                 worker_pool.start()
                 for nodeidx, node in enumerate(frontier):
                     Logger.info('Parsing prefetch file %s (node %d)'%(node, nodeidx))
-                    worker_pool.add_task(node, nodeidx)
+                    worker_pool.add_task(node)
                 worker_pool.join_tasks()
                 progress_pool.join_tasks()
                 progress_pool.add_poison_pills()

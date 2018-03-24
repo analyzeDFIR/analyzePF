@@ -172,7 +172,8 @@ class LoggedQueueWorker(BaseQueueWorker):
                 return False
             result = task(self) if callable(task) else task
             if self._result_queue is not None:
-                self._result_queue.put(result)
+                for entry in result:
+                    self._result_queue.put(entry)
             return True
         except Exception as e:
             if self._log_path is not None:
@@ -202,6 +203,7 @@ class ProgressTrackerWorker(LoggedQueueWorker):
         '''
         @BaseQueueWorker._preamble
         '''
+        super(ProgressTrackerWorker, self)._preamble()
         self._progress = tqdm(total=self._pcount, desc=self._pdesc, unit=self._punit)
     def _result_callback(self):
         '''

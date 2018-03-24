@@ -300,3 +300,16 @@ class DBManager(object):
             session = self.session
         session.commit()
         return self
+    def rollback(self, session=None):
+        '''
+        Args:
+            session: Session    => session to add record to
+        Procedure:
+            Rollback either provided or current session
+        Preconditions:
+            session is of type Session
+        '''
+        if session is None:
+            session = self.session
+        session.rollback()
+        return self

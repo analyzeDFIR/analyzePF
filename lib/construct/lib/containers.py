@@ -1,18 +1,29 @@
 from construct.lib.py3compat import *
-
 import re
 
 
-globalfullprinting = None
+globalPrintFullStrings = False
+globalPrintFalseFlags = False
 
-def setglobalfullprinting(enabled):
+
+def setGlobalPrintFullStrings(enabled=False):
     r"""
-    Sets full printing for all Container instances. When enabled, Container __str__ produces full content of bytes and strings, otherwise and by default, it produces truncated output.
+    When enabled, Container __str__ produces full content of bytes and unicode strings, otherwise and by default, it produces truncated output (16 bytes and 32 characters).
 
-    :param enabled: bool to enable or disable full printing, or None to default
+    :param enabled: bool
     """
-    global globalfullprinting
-    globalfullprinting = enabled
+    global globalPrintFullStrings
+    globalPrintFullStrings = enabled
+
+
+def setGlobalPrintFalseFlags(enabled=False):
+    r"""
+    When enabled, Container __str__ that was produced by FlagsEnum parsing prints all values, otherwise and by default, it prints only the values that are True.
+
+    :param enabled: bool
+    """
+    global globalPrintFalseFlags
+    globalPrintFalseFlags = enabled
 
 
 def recursion_lock(retval="<recursion detected>", lock_name="__recursion_lock__"):
@@ -35,9 +46,7 @@ def recursion_lock(retval="<recursion detected>", lock_name="__recursion_lock__"
 
 class Container(dict):
     r"""
-    Generic ordered dictionary that allows both key and attribute access, and preserves key order by insertion. Adding keys is preferred using \*\*kw (requires Python 3.6). Equality does NOT check item order. Also provides regex searching.
-
-	This container is mostly used by Struct construct, since its members have order, so do the values parsed.
+    Generic ordered dictionary that allows both key and attribute access, and preserves key order by insertion. Adding keys is preferred using \*\*entrieskw (requires Python 3.6). Equality does NOT check item order. Also provides regex searching.
 
     Example::
 
@@ -52,13 +61,30 @@ class Container(dict):
         # copies another dict
         >>> Container(dict2)
         >>> Container(container2)
+
+    ::
+
+        >>> print(repr(obj))
+        Container(text='utf8 decoded string...')(value=123)
+        >>> print(obj)
+        Container
+            text = u'utf8 decoded string...' (total 22)
+            value = 123
     """
     __slots__ = ["__keys_order__", "__recursion_lock__"]
 
     def __getattr__(self, name):
         try:
             if name in self.__slots__:
-                return object.__getattribute__(self, name)
+                try:
+                    return object.__getattribute__(self, name)
+                except AttributeError as e:
+                    if name == "__keys_order__":
+                        r = []
+                        object.__setattr__(self, "__keys_order__", r)
+                        return r
+                    else:
+                        raise e
             else:
                 return self[name]
         except KeyError:
@@ -91,9 +117,9 @@ class Container(dict):
         """Removes an item from the Container in linear time O(n)."""
         if key in self:
             self.__keys_order__.remove(key)
-        dict.__delitem__(self, key)
+            dict.__delitem__(self, key)
 
-    def __init__(self, *args, **kw):
+    def __init__(self, *args, **entrieskw):
         self.__keys_order__ = []
         for arg in args:
             if isinstance(arg, dict):
@@ -102,12 +128,12 @@ class Container(dict):
             else:
                 for k,v in arg:
                     self[k] = v
-        for k,v in kw.items():
+        for k,v in entrieskw.items():
             self[k] = v
 
-    def __call__(self, **kw):
+    def __call__(self, **entrieskw):
         """Chains adding new entries to the same container. See ctor."""
-        for k,v in kw.items():
+        for k,v in entrieskw.items():
             self[k] = v
         return self
 
@@ -123,6 +149,7 @@ class Container(dict):
     __iter__ = keys
 
     def clear(self):
+        """Removes all items."""
         dict.clear(self)
         self.__keys_order__ = []
 
@@ -139,6 +166,7 @@ class Container(dict):
         return k, v
 
     def update(self, seqordict):
+        """Appends items from another dict/Container or list-of-tuples."""
         if isinstance(seqordict, dict):
             seqordict = seqordict.items()
         for k,v in seqordict:
@@ -180,26 +208,45 @@ class Container(dict):
     def __repr__(self):
         parts = ["Container"]
         for k,v in self.items():
-            if not isinstance(k,str) or not k.startswith("_"):
+            if isinstance(k, str) and k.startswith("_"):
+                continue
+            if isinstance(v, stringtypes):
+                parts.extend(["(", str(k), "=", reprstring(v), ")"])
+            else:
                 parts.extend(["(", str(k), "=", repr(v), ")"])
         if len(parts) == 1:
             parts.append("()")
         return "".join(parts)
 
     @recursion_lock()
-    def __str__(self, indentation="\n    "):
-        printingcap = 64
+    def __str__(self):
+        indentation = "\n    "
         text = ["Container: "]
+        isflags = getattr(self, "_flagsenum", False)
         for k,v in self.items():
-            if not isinstance(k,str) or not k.startswith("_"):
-                text.extend([indentation, str(k), " = "])
-                if isinstance(v, stringtypes):
-                    if len(v) <= printingcap or globalfullprinting:
-                        text.append("%s (total %d)" % (reprbytes(v), len(v)))
-                    else:
-                        text.append("%s... (truncated, total %d)" % (reprbytes(v[:printingcap]), len(v)))
+            if isinstance(k, str) and k.startswith("_"):
+                continue
+            if isflags and not v and not globalPrintFalseFlags:
+                continue
+            text.extend([indentation, str(k), " = "])
+            if v.__class__.__name__ == "EnumInteger":
+                text.append("(enum) (unknown) %s" % (v, ))
+            elif v.__class__.__name__ == "EnumIntegerString":
+                text.append("(enum) %s %s" % (v, v.intvalue, ))
+            elif isinstance(v, bytestringtype):
+                printingcap = 16
+                if len(v) <= printingcap or globalPrintFullStrings:
+                    text.append("%s (total %d)" % (reprstring(v), len(v)))
                 else:
-                    text.append(indentation.join(str(v).split("\n")))
+                    text.append("%s... (truncated, total %d)" % (reprstring(v[:printingcap]), len(v)))
+            elif isinstance(v, unicodestringtype):
+                printingcap = 32
+                if len(v) <= printingcap or globalPrintFullStrings:
+                    text.append("%s (total %d)" % (reprstring(v), len(v)))
+                else:
+                    text.append("%s... (truncated, total %d)" % (reprstring(v[:printingcap]), len(v)))
+            else:
+                text.append(indentation.join(str(v).split("\n")))
         return "".join(text)
 
     def _search(self, compiled_pattern, search_all):
@@ -226,37 +273,47 @@ class Container(dict):
             return None
 
     def search(self, pattern):
+        """
+        Searches a container (non-recursively) using regex.
+        """
         compiled_pattern = re.compile(pattern)
         return self._search(compiled_pattern, False)
 
     def search_all(self, pattern):
+        """
+        Searches a container (recursively) using regex.
+        """
         compiled_pattern = re.compile(pattern)
         return self._search(compiled_pattern, True)
-
-
-class FlagsContainer(Container):
-    r"""
-    Container class derivative, extended for representing FlagsEnum. Equality does NOT check item order. Provides pretty-printing for flags, showing only values set to True. Also provides regex searching.
-    """
-
-    @recursion_lock()
-    def __str__(self, indentation="\n    "):
-        text = ["FlagsContainer: "]
-        for k,v in self.items():
-            if not k.startswith("_") and v:
-                text.extend([indentation, k, " = "])
-                lines = str(v).split("\n")
-                text.append(indentation.join(lines))
-        return "".join(text)
 
 
 class ListContainer(list):
     r"""
     Generic container like list. Provides pretty-printing. Also provides regex searching.
+
+    Example::
+
+        >>> ListContainer()
+        >>> ListContainer([1, 2, 3])
+
+    ::
+
+        >>> print(repr(obj))
+        [1, 2, 3]
+        >>> print(obj)
+        ListContainer
+            1
+            2
+            3
     """
 
     @recursion_lock()
-    def __str__(self, indentation="\n    "):
+    def __repr__(self):
+        return "ListContainer(%s)" % (list.__repr__(self), )
+
+    @recursion_lock()
+    def __str__(self):
+        indentation = "\n    "
         text = ["ListContainer: "]
         for k in self:
             text.append(indentation)
@@ -282,127 +339,15 @@ class ListContainer(list):
             return None
 
     def search(self, pattern):
+        """
+        Searches a container (non-recursively) using regex.
+        """
         compiled_pattern = re.compile(pattern)
         return self._search(compiled_pattern, False)
 
     def search_all(self, pattern):
+        """
+        Searches a container (recursively) using regex.
+        """
         compiled_pattern = re.compile(pattern)
         return self._search(compiled_pattern, True)
-
-
-class LazyContainer(object):
-    r"""
-    Lazy equivalent to Container. Each key is either associated with how to parse each value (before first access) or a cached value.
-    """
-    __slots__ = ["keysbackend", "offsetmap", "cached", "stream", "addoffset", "context"]
-
-    def __init__(self, keysbackend, offsetmap, cached, stream, addoffset, context):
-        self.keysbackend = keysbackend
-        self.offsetmap = offsetmap
-        self.cached = cached
-        self.stream = stream
-        self.addoffset = addoffset
-        self.context = context
-
-    def __getitem__(self, key):
-        if key not in self.cached:
-            at, sc = self.offsetmap[key]
-            self.stream.seek(self.addoffset + at)
-            self.cached[key] = sc._parse(self.stream, self.context, "lazy container")
-        return self.cached[key]
-
-    def __getattr__(self, name):
-        try:
-            return self[name]
-        except KeyError:
-            raise AttributeError(name)
-
-    def __len__(self):
-        return len(self.keysbackend)
-
-    def keys(self):
-        return iter(self.keysbackend)
-
-    def values(self):
-        return (self[name] for name in self.keysbackend)
-
-    def items(self):
-        return ((name,self[name]) for name in self.keysbackend)
-
-    __iter__ = keys
-
-    def __eq__(self, other):
-        if not isinstance(other, dict):
-            return False
-        if len(self) != len(other):
-            return False
-        for k,v in self.items():
-            if k not in other or v != other[k]:
-                return False
-        return True
-
-    def __str__(self):
-        return "<LazyContainer: %d possible items, %d cached>" % (len(self),len(self.cached))
-
-
-class LazyRangeContainer(ListContainer):
-    r"""
-    Lazy equivalent to ListContainer. Each key is either associated with how to parse a value (before first access) or a cached value.
-    """
-    __slots__ = ["subcon", "subsize", "count", "stream", "addoffset", "context", "cached", "offsetmap"]
-
-    def __init__(self, subcon, subsize, count, stream, addoffset, context):
-        self.subcon = subcon
-        self.subsize = subsize
-        self.count = count
-        self.stream = stream
-        self.addoffset = addoffset
-        self.context = context
-        self.cached = {}
-
-    def __getitem__(self, index):
-        if not 0 <= index < len(self):
-            raise ValueError("index %d out of range 0-%d" % (index,len(self)-1))
-        if index not in self.cached:
-            self.stream.seek(self.addoffset + index * self.subsize)
-            self.cached[index] = self.subcon._parse(self.stream, self.context, "lazy range container")
-        return self.cached[index]
-
-    def __len__(self):
-        return self.count
-
-    def __iter__(self):
-        return (self[i] for i in range(len(self)))
-
-    def __eq__(self, other):
-        return len(self)==len(other) and all(a==b for a,b in zip(self,other))
-
-    def __str__(self):
-        return "<%s: %d possible items, %d cached>" % (self.__class__.__name__, len(self), len(self.cached))
-
-
-class LazySequenceContainer(LazyRangeContainer):
-    r"""
-    Lazy equivalent to ListContainer. Each key is either associated with how to parse a value (before first access) or a cached value.
-    """
-    __slots__ = ["count", "offsetmap", "cached", "stream", "addoffset", "context"]
-
-    def __init__(self, count, offsetmap, cached, stream, addoffset, context):
-        self.count = count
-        self.offsetmap = offsetmap
-        self.cached = cached
-        self.stream = stream
-        self.addoffset = addoffset
-        self.context = context
-
-    def __getitem__(self, index):
-        if not 0 <= index < len(self):
-            raise ValueError("index %d out of range 0-%d" % (index,len(self)-1))
-        if index not in self.cached:
-            at,sc = self.offsetmap[index]
-            self.stream.seek(self.addoffset + at)
-            self.cached[index] = sc._parse(self.stream, self.context, "lazy sequence container")
-        return self.cached[index]
-
-    def __len__(self):
-        return self.count

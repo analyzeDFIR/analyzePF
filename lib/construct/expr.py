@@ -30,7 +30,6 @@ opnames = {
 
 
 class ExprMixin(object):
-    __slots__ = []
 
     def __add__(self, other):
         return BinExpr(operator.add, self, other)
@@ -107,9 +106,27 @@ class ExprMixin(object):
     def __ne__(self, other):
         return BinExpr(operator.ne, self, other)
 
+    def __getstate__(self):
+        attrs = {}
+        if hasattr(self, "__dict__"):
+            attrs.update(self.__dict__)
+        slots = []
+        c = self.__class__
+        while c is not None:
+            if hasattr(c, "__slots__"):
+                slots.extend(c.__slots__)
+            c = c.__base__
+        for name in slots:
+            if hasattr(self, name):
+                attrs[name] = getattr(self, name)
+        return attrs
+
+    def __setstate__(self, attrs):
+        for name, value in attrs.items():
+            setattr(self, name, value)
+
 
 class UniExpr(ExprMixin):
-    __slots__ = ["op", "operand"]
 
     def __init__(self, op, operand):
         self.op = op
@@ -118,13 +135,15 @@ class UniExpr(ExprMixin):
     def __repr__(self):
         return "%s %r" % (opnames[self.op], self.operand)
 
+    def __str__(self):
+        return "%s %s" % (opnames[self.op], self.operand)
+
     def __call__(self, obj, *args):
         operand = self.operand(obj) if callable(self.operand) else self.operand
         return self.op(operand)
 
 
 class BinExpr(ExprMixin):
-    __slots__ = ["op", "lhs", "rhs"]
 
     def __init__(self, op, lhs, rhs):
         self.op = op
@@ -134,6 +153,9 @@ class BinExpr(ExprMixin):
     def __repr__(self):
         return "(%r %s %r)" % (self.lhs, opnames[self.op], self.rhs)
 
+    def __str__(self):
+        return "(%s %s %s)" % (self.lhs, opnames[self.op], self.rhs)
+
     def __call__(self, obj, *args):
         lhs = self.lhs(obj) if callable(self.lhs) else self.lhs
         rhs = self.rhs(obj) if callable(self.rhs) else self.rhs
@@ -141,7 +163,6 @@ class BinExpr(ExprMixin):
 
 
 class Path(ExprMixin):
-    __slots__ = ["__name", "__field", "__parent"]
 
     def __init__(self, name, field=None, parent=None):
         self.__name = name
@@ -154,11 +175,20 @@ class Path(ExprMixin):
         else:
             return "%r.%s" % (self.__parent, self.__field)
 
+    def __str__(self):
+        if self.__parent is None:
+            return self.__name
+        else:
+            return "%s[%r]" % (self.__parent, self.__field)
+
     def __call__(self, obj, *args):
         if self.__parent is None:
             return obj
         else:
             return self.__parent(obj)[self.__field]
+
+    def __getfield__(self):
+        return self.__field
 
     def __getattr__(self, name):
         return Path(self.__name, name, self)
@@ -168,7 +198,6 @@ class Path(ExprMixin):
 
 
 class Path2(ExprMixin):
-    __slots__ = ["__name", "__index", "__parent"]
 
     def __init__(self, name, index=None, parent=None):
         self.__name = name
@@ -192,7 +221,6 @@ class Path2(ExprMixin):
 
 
 class FuncPath(ExprMixin):
-    __slots__ = ["__func", "__operand"]
 
     def __init__(self, func, operand=None):
         self.__func = func
@@ -203,6 +231,12 @@ class FuncPath(ExprMixin):
             return "%s_" % (self.__func.__name__)
         else:
             return "%s_(%r)" % (self.__func.__name__, self.__operand)
+
+    def __str__(self):
+        if self.__operand is None:
+            return "%s_" % (self.__func.__name__)
+        else:
+            return "%s_(%s)" % (self.__func.__name__, self.__operand)
 
     def __call__(self, operand, *args):
         if self.__operand is None:

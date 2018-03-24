@@ -49,7 +49,7 @@ PrefetchHeader = Struct(
     'RawSignature'      / Const(b'SCCA'),
     Padding(4),
     'FileSize'          / Int32ul,
-    'RawExecutableName' / String(60, encoding='utf16'),
+    'RawExecutableName' / PaddedString(60, encoding='utf16'),
     'RawPrefetchHash'   / Int32ul,
     Padding(4)
 )

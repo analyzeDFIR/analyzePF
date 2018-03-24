@@ -82,8 +82,9 @@ class BaseParseTask(object):
         '''
         Args:
             worker: BaseQueueWorker => worker that called this task
-        Procedure:
-            Process result set created in extract_resultset
+        Returns:
+            List<Any>
+            Process result set created in extract_resultset and return results of processing
         Preconditions:
             worker is subclass of BaseQueueWorker
         '''
@@ -112,7 +113,7 @@ class BaseParseFileOutputTask(BaseParseTask):
         self._nodeidx = nodeidx
         if 'target' not in context:
             raise KeyError('target was not provided as a keyword argument')
-        self._context = context
+        self._context = Container(**context)
     @property
     def nodeidx(self):
         '''
@@ -149,7 +150,7 @@ class BaseParseFileOutputTask(BaseParseTask):
         '''
         @BaseParseTask.process_resultset
         '''
-        target_file = path.join(self.context.get('target'), '%s_tmp_apf.out'%worker.name)
+        target_file = path.join(self.context.target, '%s_tmp_apf.out'%worker.name)
         try:
             if len(self.result_set) > 0:
                 successful_results = 0
@@ -157,7 +158,7 @@ class BaseParseFileOutputTask(BaseParseTask):
                     for result in self.result_set:
                         try:
                             if 'sep' in self.context:
-                                f.write(self.context.get('sep').join(result) + '\n')
+                                f.write(self.context.sep.join(result) + '\n')
                             else:
                                 f.write(result + '\n')
                             successful_results += 1
@@ -168,7 +169,7 @@ class BaseParseFileOutputTask(BaseParseTask):
         else:
             Logger.info('Successfully wrote %d result(s) for source file %s'%(successful_results, self.source))
         finally:
-            return True
+            return [True]
 
 class ParseCSVTask(BaseParseFileOutputTask):
     '''
@@ -179,7 +180,7 @@ class ParseCSVTask(BaseParseFileOutputTask):
         @BaseParseTask.extract_resultset
         '''
         self.result_set = list()
-        if self.context.get('info_type') == 'summary':
+        if self.context.info_type == 'summary':
             try:
                 pf = Prefetch(self.source)
                 pf.parse()
@@ -188,7 +189,7 @@ class ParseCSVTask(BaseParseFileOutputTask):
             else:
                 try:
                     result = [\
-                        str(self.context.get('nodeidx')),
+                        str(self.nodeidx),
                         str(pf.header.Version),
                         str(pf.header.Signature),
                         str(pf.header.ExecutableName if hasattr(pf.header, 'ExecutableName') else self.NULL),
@@ -263,7 +264,7 @@ class ParseBODYTask(BaseParseFileOutputTask):
                     for execution_time in pf.file_info.LastExecutionTime:
                         if execution_time.year != 1601:
                             result = [\
-                                str(self.context.get('nodeidx')),
+                                str(self.nodeidx),
                                 self.NULL,
                                 self.NULL,
                                 file_name,
@@ -292,7 +293,7 @@ class ParseJSONTask(BaseParseFileOutputTask):
         self.result_set = list()
         try:
             pf = Prefetch(self.source)
-            result = dumps(pf.parse().serialize(), sort_keys=True, indent=(2 if self.context.get('pretty') else None))
+            result = dumps(pf.parse().serialize(), sort_keys=True, indent=(2 if self.context.pretty else None))
         except Exception as e:
             Logger.error('Failed to parse Prefetch file %s (%s)'%(self.source, str(e)))
         else:
@@ -319,7 +320,7 @@ class ParseDBTaskStage2(BaseParseTask):
                 try:
                     ledger.header = db.Header().populate_fields(pf.header)
                 except Exception as e:
-                    Logger.error('Failed to get header information from %s (%s)'(pf._filepath, str(e)))
+                    Logger.error('Failed to get header information from %s (%s)'%(pf._filepath, str(e)))
                 else:
                     try:
                         ledger.header.file_info = db.FileInformation().populate_fields(pf.file_info)
@@ -336,9 +337,11 @@ class ParseDBTaskStage2(BaseParseTask):
                         try:
                             for file_metric, file_name in zip(pf.file_metrics, pf.filename_strings):
                                 try:
+                                    file_reference = file_metric.FileReference
+                                    del file_metric.FileReference
                                     db_file_metric = db.FileMetric().populate_fields(file_metric)
                                     db_file_metric.file_name = db.FileMetricsName(file_name=file_name)
-                                    db_file_metric.file_reference = db.FileReference().populate_fields(file_metric.FileReference)
+                                    db_file_metric.file_reference = db.FileReference().populate_fields(file_reference)
                                     ledger.header.file_metrics.append(db_file_metric)
                                 except Exception as e:
                                     Logger.error('Failed to add file metrics entry from %s (%s)'%(pf._filepath, str(e)))
@@ -359,7 +362,7 @@ class ParseDBTaskStage2(BaseParseTask):
                                 try:
                                     for volumes_info, file_references, directory_strings in zip(pf.volumes_info, pf.file_references, pf.directory_strings):
                                         db_volumes_info = db.VolumesInformation().populate_fields(volumes_info)
-                                        for file_reference in file_references:
+                                        for file_reference in file_references.References:
                                             try:
                                                 db_volumes_info.file_references.append(\
                                                     db.FileReference().populate_fields(file_reference)\
@@ -377,20 +380,31 @@ class ParseDBTaskStage2(BaseParseTask):
                                 except Exception as e:
                                     Logger.error('Failed to get volumes information from %s (%s)'%(pf._filepath, str(e)))
                                 else:
+                                    ledger.complete = True
                                     self.result_set.append(ledger)
+                                    Logger.info('Successfully constructed database object from %s'%pf._filepath)
     def process_resultset(self, worker):
         '''
         @BaseParseTask.process_resultset
         '''
         if worker.manager.session is None:
-            worker.manager.create_session()
+            try:
+                worker.manager.create_session()
+            except Exception as e:
+                Logger.error('Failed to create database session (%s)'%str(e))
+                return [False]
+        successful_results = 0
         for result in self.result_set:
             try:
                 worker.manager.add(result)
                 worker.manager.commit()
+                successful_results += 1
             except Exception as e:
                 Logger.error('Failed to commit result to database (%s)'%str(e))
-        return True
+                worker.manager.rollback()
+        if successful_results > 0:
+            Logger.info('Successfully committed %d result(s) to database'%successful_results)
+        return [True]
 
 class ParseDBTaskStage1(BaseParseTask):
     '''
@@ -404,13 +418,14 @@ class ParseDBTaskStage1(BaseParseTask):
         try:
             pf = Prefetch(self.source)
             pf.parse()
+            pf._stream = None
         except Exception as e:
             Logger.error('Failed to parse Prefetch file %s (%s)'%(self.source, str(e)))
         else:
             try:
-                self.result_set.append(ParseDBTaskStage2(result))
+                self.result_set.append(ParseDBTaskStage2([pf]))
             except Exception as e:
-                Logger.error('Failed to create JSON output record for source file %s (%s)'%(self.source, str(e)))
+                Logger.error('Failed to create DB output record for source file %s (%s)'%(self.source, str(e)))
     def process_resultset(self, worker):
         '''
         @BaseParseTask.process_resultset

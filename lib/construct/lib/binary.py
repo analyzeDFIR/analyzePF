@@ -1,17 +1,18 @@
 from construct.lib.py3compat import *
+import binascii
 
 
 def integer2bits(number, width):
     r"""
-    Converts an integer into its binary representation in a b-string. Width is the amount of bits to generate. If width is larger than the actual amount of bits required to represent number in binary, sign-extension is used. If it's smaller, the representation is trimmed to width bits. Each bit is represented as either b'\\x00' or b'\\x01'. The most significant is first, big-endian. This is reverse to `bits2integer`.
+    Converts an integer into its binary representation in a bit-string. Width is the amount of bits to generate. If width is larger than the actual amount of bits required to represent number in binary, sign-extension is used. If it's smaller, the representation is trimmed to width bits. Each bit is represented as either \\x00 or \\x01. The most significant is first, big-endian. This is reverse to `bits2integer`.
 
     Examples:
 
         >>> integer2bits(19, 8)
         b'\x00\x00\x00\x01\x00\x00\x01\x01'
     """
-    if width < 1:
-        raise ValueError("width must be positive")
+    if width < 0:
+        raise ValueError("width must be non-negative")
     number = int(number)
     if number < 0:
         number += 1 << width
@@ -26,15 +27,15 @@ def integer2bits(number, width):
 
 def integer2bytes(number, width):
     r"""
-    Converts a b-string into an integer. This is reverse to `bytes2integer`.
+    Converts a bytes-string into an integer. This is reverse to `bytes2integer`.
 
     Examples:
 
         >>> integer2bytes(19,4)
         '\x00\x00\x00\x13'
     """
-    if width < 1:
-        raise ValueError("width must be positive")
+    if width < 0:
+        raise ValueError("width must be non-negative")
     number = int(number)
     if number < 0:
         number += 1 << (width * 8)
@@ -47,39 +48,29 @@ def integer2bytes(number, width):
     return b"".join(acc)
 
 
-ONEBIT2INTEGER_CACHE = {b"0":0, b"\x00":0, b"1":1, b"\x01":1}
-def onebit2integer(b):
-    try:
-        return ONEBIT2INTEGER_CACHE[b]
-    except KeyError:
-        raise ValueError(r"bit was not recognized as one of: 0 1 \x00 \x01")
-
-
 def bits2integer(data, signed=False):
     r"""
-    Converts a b-string into an integer. Both b'0' and b'\\x00' are considered zero, and both b'1' and b'\\x01' are considered one. Set sign to interpret the number as a 2-s complement signed integer. This is reverse to `integer2bits`.
+    Converts a bit-string into an integer. Set sign to interpret the number as a 2-s complement signed integer. This is reverse to `integer2bits`.
 
     Examples:
 
         >>> bits2integer(b"\x01\x00\x00\x01\x01")
         19
-        >>> bits2integer(b"10011")
-        19
     """
     number = 0
-    for b in iteratebytes(data):
-        number = (number << 1) | onebit2integer(b)
+    for b in iterateints(data):
+        number = (number << 1) | b
 
-    if signed and onebit2integer(data[0:1]):
-        bias = 1 << (len(data) -1)
-        return number - bias*2
+    if signed and byte2int(data[0:1]):
+        bias = 1 << len(data)
+        return number - bias
     else:
         return number
 
 
 def bytes2integer(data, signed=False):
     r"""
-    Converts a b-string into an integer. This is reverse to `integer2bytes`.
+    Converts a byte-string into an integer. This is reverse to `integer2bytes`.
 
     Examples:
 
@@ -91,8 +82,8 @@ def bytes2integer(data, signed=False):
         number = (number << 8) | b
 
     if signed and byte2int(bytes2bits(data[0:1])[0:1]):
-        bias = 1 << (len(data)*8 -1)
-        return number - bias*2
+        bias = 1 << len(data)*8
+        return number - bias
     else:
         return number
 
@@ -127,11 +118,23 @@ def bits2bytes(data):
 
 def swapbytes(data):
     r"""
-    Performs an endianness swap on a bit-string bytes. Its length must be multiple of 8.
+    Performs an endianness swap on byte-string.
 
     Example:
 
-        >>> swapbytes(b'0000000011111111')
+        >>> swapbytes(b'abcd')
+        b'dcba'
+    """
+    return data[::-1]
+
+
+def swapbytesinbits(data):
+    r"""
+    Performs an byte-swap within a bit-string. Its length must be multiple of 8.
+
+    Example:
+
+        >>> swapbytesinbits(b'0000000011111111')
         b'1111111100000000'
     """
     if len(data) & 7:
@@ -139,14 +142,24 @@ def swapbytes(data):
     return b"".join(data[i:i+8] for i in reversed(range(0,len(data),8)))
 
 
-SWAPBITS_CACHE = {i:bits2bytes(bytes2bits(int2byte(i))[::-1]) for i in range(256)}
-def swapbits(data):
+SWAPBITSINBYTES_CACHE = {i:bits2bytes(bytes2bits(int2byte(i))[::-1]) for i in range(256)}
+def swapbitsinbytes(data):
     r"""
-    Performs a bit-reversal on bytes.
+    Performs a bit-reversal within a byte-string.
 
     Example:
 
         >>> swapbits(b'\xf0')
         b'\x0f'
     """
-    return b"".join(SWAPBITS_CACHE[b] for b in iterateints(data))
+    return b"".join(SWAPBITSINBYTES_CACHE[b] for b in iterateints(data))
+
+
+def hexlify(data):
+    """Returns binascii.hexlify(data)."""
+    return binascii.hexlify(data)
+
+
+def unhexlify(data):
+    """Returns binascii.unhexlify(data)."""
+    return binascii.unhexlify(data)
