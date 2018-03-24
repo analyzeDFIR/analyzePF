@@ -36,9 +36,9 @@ class BaseParseTask(object):
     Base class for parsing tasks
     '''
 
-    def __init__(source):
+    def __init__(self, source):
         self._source = source
-        self.resultset = None
+        self._resultset = None
     @property
     def source(self):
         '''
@@ -67,7 +67,7 @@ class BaseParseTask(object):
             value if of type List<Any>
         '''
         assert isinstance(value, list)
-        self._source = value
+        self._resultset = value
     def extract_resultset(self, worker):
         '''
         Args:
@@ -77,7 +77,7 @@ class BaseParseTask(object):
         Preconditions:
             worker is subclass of BaseQueueWorker
         '''
-        raise NotImplementedError('extract_resultset method not implemented for %s'type(self).__name__)
+        raise NotImplementedError('extract_resultset method not implemented for %s'%type(self).__name__)
     def process_resultset(self, worker):
         '''
         Args:
@@ -87,7 +87,7 @@ class BaseParseTask(object):
         Preconditions:
             worker is subclass of BaseQueueWorker
         '''
-        raise NotImplementedError('process_resultset method not implemented for %s'type(self).__name__)
+        raise NotImplementedError('process_resultset method not implemented for %s'%type(self).__name__)
     def __call__(self, worker):
         '''
         Args:
@@ -107,12 +107,12 @@ class BaseParseFileOutputTask(BaseParseTask):
     '''
     NULL = ''
 
-    def __init__(self, source, nodeidx, **kwargs):
+    def __init__(self, source, nodeidx, **context):
         super(BaseParseFileOutputTask, self).__init__(source)
         self._nodeidx = nodeidx
-        if 'target' not in kwargs:
+        if 'target' not in context:
             raise KeyError('target was not provided as a keyword argument')
-        self.context = Container(**kwargs)
+        self._context = context
     @property
     def nodeidx(self):
         '''
@@ -149,15 +149,15 @@ class BaseParseFileOutputTask(BaseParseTask):
         '''
         @BaseParseTask.process_resultset
         '''
-        target_file = path.join(self.context.target, '%s_tmp_apf.out'%worker.name)
+        target_file = path.join(self.context.get('target'), '%s_tmp_apf.out'%worker.name)
         try:
-            if len(result_set) > 0:
+            if len(self.result_set) > 0:
                 successful_results = 0
                 with open(target_file, 'a') as f:
                     for result in self.result_set:
                         try:
                             if 'sep' in self.context:
-                                f.write(self.context.sep.join(result) + '\n')
+                                f.write(self.context.get('sep').join(result) + '\n')
                             else:
                                 f.write(result + '\n')
                             successful_results += 1
@@ -166,7 +166,7 @@ class BaseParseFileOutputTask(BaseParseTask):
         except Exception as e:
             Logger.error('Failed to write results for source file %s (%s)'%(self.source, str(e)))
         else:
-            Logger.info('Successfully wrote %d results for source file %s'%(successful_results, self.source))
+            Logger.info('Successfully wrote %d result(s) for source file %s'%(successful_results, self.source))
         finally:
             return True
 
@@ -179,7 +179,7 @@ class ParseCSVTask(BaseParseFileOutputTask):
         @BaseParseTask.extract_resultset
         '''
         self.result_set = list()
-        if self.context.info_type == 'summary':
+        if self.context.get('info_type') == 'summary':
             try:
                 pf = Prefetch(self.source)
                 pf.parse()
@@ -188,7 +188,7 @@ class ParseCSVTask(BaseParseFileOutputTask):
             else:
                 try:
                     result = [\
-                        str(self.context.nodeidx),
+                        str(self.context.get('nodeidx')),
                         str(pf.header.Version),
                         str(pf.header.Signature),
                         str(pf.header.ExecutableName if hasattr(pf.header, 'ExecutableName') else self.NULL),
@@ -263,10 +263,10 @@ class ParseBODYTask(BaseParseFileOutputTask):
                     for execution_time in pf.file_info.LastExecutionTime:
                         if execution_time.year != 1601:
                             result = [\
-                                str(self.context.nodeidx),
+                                str(self.context.get('nodeidx')),
                                 self.NULL,
                                 self.NULL,
-                                file_path,
+                                file_name,
                                 self.NULL,
                                 self.NULL,
                                 self.NULL,
@@ -292,7 +292,7 @@ class ParseJSONTask(BaseParseFileOutputTask):
         self.result_set = list()
         try:
             pf = Prefetch(self.source)
-            result = dumps(pf.parse().serialize(), sort_keys=True, indent=(2 if self.pretty else None))
+            result = dumps(pf.parse().serialize(), sort_keys=True, indent=(2 if self.context.get('pretty') else None))
         except Exception as e:
             Logger.error('Failed to parse Prefetch file %s (%s)'%(self.source, str(e)))
         else:
@@ -314,12 +314,12 @@ class ParseDBTaskStage2(BaseParseTask):
             try:
                 ledger = db.FileLedger().populate_fields(pf.get_metadata())
             except Exception as e:
-                Logger.error('Failed to get metadata from %s (%s)'%(pf.filepath, str(e)))
+                Logger.error('Failed to get metadata from %s (%s)'%(pf._filepath, str(e)))
             else:
                 try:
                     ledger.header = db.Header().populate_fields(pf.header)
                 except Exception as e:
-                    Logger.error('Failed to get header information from %s (%s)'(pf.filepath, str(e)))
+                    Logger.error('Failed to get header information from %s (%s)'(pf._filepath, str(e)))
                 else:
                     try:
                         ledger.header.file_info = db.FileInformation().populate_fields(pf.file_info)
@@ -329,9 +329,9 @@ class ParseDBTaskStage2(BaseParseTask):
                                     db.LastExecutionTime(last_execution_time=last_execution_time)\
                                 )
                             except Exception as e:
-                                Logger.error('Failed to add last execution time entry from %s (%s)'%(pf.filepath, str(e)))
+                                Logger.error('Failed to add last execution time entry from %s (%s)'%(pf._filepath, str(e)))
                     except Exception as e:
-                        Logger.error('Failed to get file information from %s (%s)'%(pf.filepath, str(e)))
+                        Logger.error('Failed to get file information from %s (%s)'%(pf._filepath, str(e)))
                     else:
                         try:
                             for file_metric, file_name in zip(pf.file_metrics, pf.filename_strings):
@@ -341,9 +341,9 @@ class ParseDBTaskStage2(BaseParseTask):
                                     db_file_metric.file_reference = db.FileReference().populate_fields(file_metric.FileReference)
                                     ledger.header.file_metrics.append(db_file_metric)
                                 except Exception as e:
-                                    Logger.error('Failed to add file metrics entry from %s (%s)'%(pf.filepath, str(e)))
+                                    Logger.error('Failed to add file metrics entry from %s (%s)'%(pf._filepath, str(e)))
                         except Exception as e:
-                            Logger.error('Failed to get file metrics information from %s (%s)'%(pf.filepath, str(e)))
+                            Logger.error('Failed to get file metrics information from %s (%s)'%(pf._filepath, str(e)))
                         else:
                             try:
                                 for trace_chain in pf.trace_chains:
@@ -352,9 +352,9 @@ class ParseDBTaskStage2(BaseParseTask):
                                             db.TraceChain().populate_fields(trace_chain)\
                                         )
                                     except Exception as e:
-                                        Logger.error('Failed to add trace chains entry from %s (%s)'%(pf.filepath, str(e)))
+                                        Logger.error('Failed to add trace chains entry from %s (%s)'%(pf._filepath, str(e)))
                             except Exception as e:
-                                Logger.error('Failed to get trace chains information from %s (%s)'%(pf.filepath, str(e)))
+                                Logger.error('Failed to get trace chains information from %s (%s)'%(pf._filepath, str(e)))
                             else:
                                 try:
                                     for volumes_info, file_references, directory_strings in zip(pf.volumes_info, pf.file_references, pf.directory_strings):
@@ -365,17 +365,17 @@ class ParseDBTaskStage2(BaseParseTask):
                                                     db.FileReference().populate_fields(file_reference)\
                                                 )
                                             except Exception as e:
-                                                Logger.error('Failed to add file reference to volumes info from %s (%s)'%(pf.filepath, str(e)))
+                                                Logger.error('Failed to add file reference to volumes info from %s (%s)'%(pf._filepath, str(e)))
                                         for directory_string in directory_strings:
                                             try:
                                                 db_volumes_info.directory_strings.append(\
                                                     db.DirectoryString(string=directory_string)\
                                                 )
                                             except Exception as e:
-                                                Logger.error('Failed to add directory string to volumes info from %s (%s)'%(pf.filepath, str(e)))
+                                                Logger.error('Failed to add directory string to volumes info from %s (%s)'%(pf._filepath, str(e)))
                                         ledger.header.volumes_info.append(db_volumes_info)
                                 except Exception as e:
-                                    Logger.error('Failed to get volumes information from %s (%s)'%(pf.filepath, str(e)))
+                                    Logger.error('Failed to get volumes information from %s (%s)'%(pf._filepath, str(e)))
                                 else:
                                     self.result_set.append(ledger)
     def process_resultset(self, worker):

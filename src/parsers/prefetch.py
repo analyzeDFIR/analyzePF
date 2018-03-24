@@ -43,7 +43,7 @@ class Prefetch(Container):
     def __init__(self, filepath, load=False):
         super(Prefetch, self).__init__()
         self._stream = None
-        self.filepath = filepath
+        self._filepath = filepath
         if load:
             self.parse()
     def _get_version(self):
@@ -56,7 +56,7 @@ class Prefetch(Container):
         Preconditions:
             N/A
         '''
-        with open(self.filepath, 'rb') as pf:
+        with open(self._filepath, 'rb') as pf:
             try:
                 version = pfstructs.PrefetchVersion.parse_stream(pf)
             except:
@@ -76,7 +76,7 @@ class Prefetch(Container):
         if issubclass(type(value), Container):
             cleaned_value = Container(value)
             for key in cleaned_value.keys():
-                if key.startswith('Raw'):
+                if key.startswith('Raw') or key.startswith('_'):
                     del cleaned_value[key]
                 else:
                     cleaned_value[key] = self._clean_transform(cleaned_value[key], serialize)
@@ -382,7 +382,7 @@ class Prefetch(Container):
             Logger.error('Unable to obtain %s hash of prefetch file (%s)'%(algorithm, str(e)))
             return None
         else:
-            with open(self.filepath, 'rb') as pf:
+            with open(self._filepath, 'rb') as pf:
                 buffer = pf.read(1024)
                 while len(buffer) > 0:
                     hash.update(buffer)
@@ -410,15 +410,15 @@ class Prefetch(Container):
         '''
         assert isinstance(simple_hash, bool), 'Simple_hash is of type Boolean'
         return Container(\
-            file_name=path.basename(self.filepath),
-            file_path=path.abspath(self.filepath),
-            file_size=path.getsize(self.filepath),
+            file_name=path.basename(self._filepath),
+            file_path=path.abspath(self._filepath),
+            file_size=path.getsize(self._filepath),
             md5hash=self._hash_file('md5') if not simple_hash else None,
             sha1hash=self._hash_file('sha1') if not simple_hash else None,
             sha2hash=self._hash_file('sha256'),
-            modify_time=datetime.fromtimestamp(path.getmtime(self.filepath), tzlocal()).astimezone(tzutc()),
-            access_time=datetime.fromtimestamp(path.getatime(self.filepath), tzlocal()).astimezone(tzutc()),
-            create_time=datetime.fromtimestamp(path.getctime(self.filepath), tzlocal()).astimezone(tzutc())\
+            modify_time=datetime.fromtimestamp(path.getmtime(self._filepath), tzlocal()).astimezone(tzutc()),
+            access_time=datetime.fromtimestamp(path.getatime(self._filepath), tzlocal()).astimezone(tzutc()),
+            create_time=datetime.fromtimestamp(path.getctime(self._filepath), tzlocal()).astimezone(tzutc())\
         )
     def get_stream(self, persist=False):
         '''
@@ -426,13 +426,13 @@ class Prefetch(Container):
             persist: Boolean    => whether to persist stream as attribute on self
         Returns:
             TextIOWrapper|BytesIO
-            Stream of prefetch file at self.filepath
+            Stream of prefetch file at self._filepath
         Preconditions:
             persist is of type Boolean  (assumed True)
         '''
-        stream = open(self.filepath, 'rb') \
+        stream = open(self._filepath, 'rb') \
             if self._get_version() is not None \
-            else BytesIO(DecompressWin10().decompress(self.filepath))
+            else BytesIO(DecompressWin10().decompress(self._filepath))
         if persist:
             self._stream = stream
         return stream
@@ -476,7 +476,7 @@ class Prefetch(Container):
             header, file information, file metrics, trace chains,
             filename strings, and volumes information
         Preconditions:
-            self.filepath points to valid prefetch file
+            self._filepath points to valid prefetch file
         '''
         self._stream = self.get_stream()
         try:

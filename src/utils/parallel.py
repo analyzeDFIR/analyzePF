@@ -175,7 +175,8 @@ class LoggedQueueWorker(BaseQueueWorker):
                 self._result_queue.put(result)
             return True
         except Exception as e:
-            Logger.error('Uncaught exception while executing %s (%s)'%(type(task).__name__, str(e)))
+            if self._log_path is not None:
+                Logger.error('Uncaught exception while executing %s (%s)'%(type(task).__name__, str(e)))
             if self._result_queue is not None:
                 self._result_queue.put(e)
             return True
