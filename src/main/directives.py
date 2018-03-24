@@ -34,6 +34,8 @@ from src.utils.config import initialize_logger, synthesize_log_path
 from src.utils.registry import RegistryMetaclassMixin 
 import src.utils.parallel as parallel
 import src.main.tasks as tasks
+from src.database.manager import DBManager
+from src.database.models import BaseTable
 
 class DirectiveRegistry(RegistryMetaclassMixin, type):
     '''
@@ -198,11 +200,7 @@ class BaseParseFileOutputDirective(BaseDirective):
             worker_pool.start()
             for nodeidx, node in enumerate(frontier):
                 Logger.info('Parsing prefetch file %s (node %d)'%(node, nodeidx))
-                prefetch_file = open(node, 'rb')
-                try:
-                    worker_pool.add_task(nodeidx, node)
-                finally:
-                    prefetch_file.close()
+                worker_pool.add_task(node, nodeidx)
             worker_pool.join_tasks()
             progress_pool.join_tasks()
             progress_pool.add_poison_pills()
@@ -333,6 +331,33 @@ class ParseDBDirective(BaseDirective):
     '''
     Directive for parsing Prefetch file to DB format
     '''
+    @staticmethod
+    def _prepare_conn_string(args):
+        '''
+        @ParseDBDirective.run
+        '''
+        assert (args.db_driver == 'sqlite' and path.exists(path.dirname(args.db_name))) or \
+            args.db_conn_string is not None or \
+            (args.db_user is not None and args.db_passwd is not None \
+            and args.db_host is not None and args.db_port is not None), 'Received invalid database config'
+        if args.db_conn_string is not None:
+            args.db_conn_string = args.db_conn_string.rstrip('/')
+            return args.db_conn_string + '/' + args.db_name
+        elif args.db_driver == 'sqlite':
+            args.db_name = path.abspath(args.db_name)
+            return args.db_driver + ':///' + args.db_name
+        else:
+            return args.db_driver + \
+                '://' + \
+                args.db_user + \
+                ':' + \
+                args.db_passwd + \
+                '@' + \
+                args.db_host + \
+                ':' + \
+                args.db_port + \
+                '/' + \
+                args.db_name
     @classmethod
     def run(cls, args):
         '''
@@ -361,8 +386,50 @@ class ParseDBDirective(BaseDirective):
                 2) args.db_conn_string is not None and is valid connection string 
                 3) args.db_user, args.db_passwd, args.db_host, and args.db_port are not None
         '''
-        assert (args.db_driver == 'sqlite' and path.exists(path.dirname(args.db_name))) or \
-            args.db_conn_string is not None or \
-            (args.db_user is not None and args.db_passwd is not None \
-            and args.db_host is not None and args.db_port is not None), 'Received invalid database config'
-        print(args)
+        conn_string = cls._prepare_conn_string(args)
+        manager = DBManager(conn_string=conn_string, metadata=BaseTable.metadata)
+        try:
+            manager.initialize(bootstrap=True)
+        except Exception as e:
+            Logger.error('Failed to initialize database manager (%s)'%str(e))
+        else:
+            frontier = cls.get_frontier(args.sources)
+            frontier_count = len(frontier)
+            if frontier_count > 0:
+                tqdm.set_lock(parallel.RLock())
+                progress_pool = parallel.WorkerPool(\
+                    parallel.JoinableQueue(-1), 
+                    tasks.ParseDBTaskStage2,
+                    daemonize=False, 
+                    worker_class=parallel.DBProgressTrackerWorker,
+                    worker_count=1,
+                    worker_kwargs=dict(\
+                        pcount=frontier_count,
+                        pdesc='Total',
+                        punit='files',
+                        manager=manager\
+                    )\
+                )
+                worker_pool = parallel.WorkerPool(\
+                    parallel.JoinableQueue(-1), 
+                    tasks.ParseDBTaskStage1, 
+                    daemonize=False, 
+                    worker_count=args.threads,
+                    worker_kwargs=dict(\
+                        result_queue=progress_pool.result_queue, 
+                        log_path=args.log_path\
+                    )
+                )
+                progress_pool.start()
+                worker_pool.start()
+                for nodeidx, node in enumerate(frontier):
+                    Logger.info('Parsing prefetch file %s (node %d)'%(node, nodeidx))
+                    worker_pool.add_task(node, nodeidx)
+                worker_pool.join_tasks()
+                progress_pool.join_tasks()
+                progress_pool.add_poison_pills()
+                progress_pool.join_workers()
+                worker_pool.add_poison_pills()
+                worker_pool.join_workers()
+        finally:
+            manager.close_session()

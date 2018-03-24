@@ -29,86 +29,166 @@ from json import dumps
 from construct import Container
 
 from src.parsers.prefetch import Prefetch
+import src.database.models as db
 
 class BaseParseTask(object):
     '''
-    Base task class
+    Base class for parsing tasks
     '''
-    NULL = None
 
-    def __init__(self, nodeidx, filepath, **kwargs):
-        self.nodeidx = nodeidx
-        self.filepath = filepath
-        for kwarg in kwargs:
-            setattr(self, kwarg, kwargs[kwarg])
+    def __init__(source):
+        self._source = source
+        self.resultset = None
+    @property
+    def source(self):
+        '''
+        @source.getter
+        '''
+        return self._source
+    @source.setter
+    def source(self, value):
+        '''
+        @source.setter
+        Preconditions:
+            N/A
+        '''
+        raise AttributeError('source attribute must be set in the constructor')
+    @property
+    def resultset(self):
+        '''
+        @resultset.getter
+        '''
+        return self._resultset
+    @resultset.setter
+    def resultset(self, value):
+        '''
+        @_resultset.setter
+        Preconditions:
+            value if of type List<Any>
+        '''
+        assert isinstance(value, list)
+        self._source = value
+    def extract_resultset(self, worker):
+        '''
+        Args:
+            worker: BaseQueueWorker => worker that called this task
+        Procedure:
+            Convert source into result set
+        Preconditions:
+            worker is subclass of BaseQueueWorker
+        '''
+        raise NotImplementedError('extract_resultset method not implemented for %s'type(self).__name__)
+    def process_resultset(self, worker):
+        '''
+        Args:
+            worker: BaseQueueWorker => worker that called this task
+        Procedure:
+            Process result set created in extract_resultset
+        Preconditions:
+            worker is subclass of BaseQueueWorker
+        '''
+        raise NotImplementedError('process_resultset method not implemented for %s'type(self).__name__)
     def __call__(self, worker):
-        pf = Prefetch(self.filepath)
-        result_set = self._get_resultset(pf)
-        self._handle_resultset(result_set, worker)
-        return True
+        '''
+        Args:
+            worker: BaseQueueWorker => worker that called this task
+        Returns:
+            Any
+            Result of running this task
+        Preconditions:
+            worker is subclass of BaseQueueWorker
+        '''
+        self.extract_resultset(worker)
+        return self.process_resultset(worker)
 
 class BaseParseFileOutputTask(BaseParseTask):
     '''
-    Base task class for writing to output file
+    Base class for tasks that write output to file
     '''
     NULL = ''
 
-    def _get_resultset(self, pf):
+    def __init__(self, source, nodeidx, **kwargs):
+        super(BaseParseFileOutputTask, self).__init__(source)
+        self._nodeidx = nodeidx
+        if 'target' not in kwargs:
+            raise KeyError('target was not provided as a keyword argument')
+        self.context = Container(**kwargs)
+    @property
+    def nodeidx(self):
         '''
-        Args:
-            pf: Prefetch    => prefetch file to extract results from 
-        Returns:
-            List<List<Any>>
-            List of results to write to output file
+        @nodeidx.getter
+        '''
+        return self._nodeidx
+    @nodeidx.setter
+    def nodeidx(self, value):
+        '''
+        @nodeidx.setter
         Preconditions:
-            pf is of type Prefetch  (assumed True)
+            N/A
         '''
-        raise NotImplementedError('method _get_resultset not implemented for %s'%type(self).__name__)
-    def _handle_resultset(self, result_set, worker):
+        raise AttributeError('nodeidx attribute must be set in the constructor')
+    @property
+    def context(self):
         '''
-        Args:
-            result_set: List<List<Any>> => list of results to write to output file
-            worker: BaseQueueWorker     => worker object that called task
-        Procedure:
-            Attempt to write each result in result set to the output file,
-            logging any errors that occur
+        @context.getter
+        '''
+        return self._context
+    @context.setter
+    def context(self, value):
+        '''
+        @context.setter
         Preconditions:
-            result_set is of type List<List<Any>>   (assumed True)
-            worker is subclass of BaseQueueWorker   (assumed True)
+            value is of type Container
         '''
-        target_file = path.join(self.target, '%s_tmp_apf.out'%worker.name)
+        if self._context is None:
+            assert isinstance(value, Container)
+            self._context = value
+        else:
+            raise AttributeError('context attribute has already been set')
+    def process_resultset(self, worker):
+        '''
+        @BaseParseTask.process_resultset
+        '''
+        target_file = path.join(self.context.target, '%s_tmp_apf.out'%worker.name)
         try:
             if len(result_set) > 0:
+                successful_results = 0
                 with open(target_file, 'a') as f:
-                    for result in result_set:
+                    for result in self.result_set:
                         try:
-                            if hasattr(self, 'sep'):
-                                f.write(self.sep.join(result) + '\n')
+                            if 'sep' in self.context:
+                                f.write(self.context.sep.join(result) + '\n')
                             else:
                                 f.write(result + '\n')
+                            successful_results += 1
                         except Exception as e:
-                            Logger.error('Failed to write %s to output file %s (%s)'%(str(result), target_file, str(e)))
+                            Logger.error('Failed to write result for source file %s (%s)'%(self.source, str(e)))
         except Exception as e:
-            Logger.error('Failed to write results to output file %s (%s)'%(target_file, str(e)))
+            Logger.error('Failed to write results for source file %s (%s)'%(self.source, str(e)))
+        else:
+            Logger.info('Successfully wrote %d results for source file %s'%(successful_results, self.source))
+        finally:
+            return True
 
 class ParseCSVTask(BaseParseFileOutputTask):
     '''
-    Task class for parsing single Prefetch file to CSV format
+    Class for parsing single Prefetch file to CSV format
     '''
-    def _get_resultset(self, pf):
+    def extract_resultset(self, worker):
         '''
-        @BaseParseFileOutputTask._get_resultset
+        @BaseParseTask.extract_resultset
         '''
-        result_set = list()
-        if self.info_type == 'summary':
+        self.result_set = list()
+        if self.context.info_type == 'summary':
             try:
+                pf = Prefetch(self.source)
                 pf.parse()
             except Exception as e:
-                Logger.error('Failed to parse Prefetch file %s (%s)'%(self.filepath, str(e)))
+                Logger.error('Failed to parse Prefetch file %s (%s)'%(self.source, str(e)))
             else:
                 try:
                     result = [\
-                        str(self.nodeidx),
+                        str(self.context.nodeidx),
                         str(pf.header.Version),
                         str(pf.header.Signature),
                         str(pf.header.ExecutableName if hasattr(pf.header, 'ExecutableName') else self.NULL),
@@ -144,10 +224,9 @@ class ParseCSVTask(BaseParseFileOutputTask):
                         attribute = getattr(pf, attribute_key)
                         result.append('|'.join(str(len(attribute_entry)) for attribute_entry in attribute)) 
                     result.append('|'.join(str(fstring) for fstring in pf.filename_strings))
-                    result_set.append(result)
+                    self.result_set.append(result)
                 except Exception as e:
-                    Logger.error('Failed to create CSV output record (%s)'%str(e))
-        return result_set
+                    Logger.error('Failed to create CSV output record for source file %s (%s)'%(self.source, str(e)))
 
 class ParseBODYTask(BaseParseFileOutputTask):
     '''
@@ -166,24 +245,25 @@ class ParseBODYTask(BaseParseFileOutputTask):
         '''
         return (dt - datetime(1970,1,1, tzinfo=timezone.utc)) / timedelta(seconds=1)
 
-    def _get_resultset(self, pf):
+    def extract_resultset(self, worker):
         '''
-        @BaseParseFileOutputTask._get_resultset
+        @BaseParseTask.extract_resultset
         '''
-        result_set = list()
+        self.result_set = list()
         try:
+            pf = Prefetch(self.source)
             pf.parse()
         except Exception as e:
-            Logger.error('Failed to parse Prefetch file %s (%s)'%(self.filepath, str(e)))
+            Logger.error('Failed to parse Prefetch file %s (%s)'%(self.source, str(e)))
         else:
             try:
                 if len(pf.file_info.LastExecutionTime) > 0:
-                    file_path = path.basename(self.filepath)
-                    file_size = stat(self.filepath).st_size
+                    file_name = path.basename(self.source)
+                    file_size = stat(self.source).st_size
                     for execution_time in pf.file_info.LastExecutionTime:
                         if execution_time.year != 1601:
                             result = [\
-                                str(self.nodeidx),
+                                str(self.context.nodeidx),
                                 self.NULL,
                                 self.NULL,
                                 file_path,
@@ -197,27 +277,142 @@ class ParseBODYTask(BaseParseFileOutputTask):
                                 self.NULL,
                                 self.NULL\
                             ]
-                            result_set.append(result)
+                            self.result_set.append(result)
             except Exception as e:
-                Logger.error('Failed to create BODY output record (%s)'%str(e))
-        return result_set
+                Logger.error('Failed to create BODY output record for source file %s (%s)'%(self.source, str(e)))
 
 class ParseJSONTask(BaseParseFileOutputTask):
     '''
-    Task class for parsing single Prefetch file to JSON format
+    Class for parsing single Prefetch file to JSON format
     '''
-    def _get_resultset(self, pf):
+    def extract_resultset(self, worker):
         '''
-        @BaseParseFileOutputTask._get_resultset
+        @BaseParseTask.extract_resultset
         '''
-        result_set = list()
+        self.result_set = list()
         try:
+            pf = Prefetch(self.source)
             result = dumps(pf.parse().serialize(), sort_keys=True, indent=(2 if self.pretty else None))
         except Exception as e:
-            Logger.error('Failed to parse Prefetch file %s (%s)'%(self.filepath, str(e)))
+            Logger.error('Failed to parse Prefetch file %s (%s)'%(self.source, str(e)))
         else:
             try:
-                result_set.append(result)
+                self.result_set.append(result)
             except Exception as e:
-                Logger.error('Failed to create JSON output record (%s)'%str(e))
-        return result_set
+                Logger.error('Failed to create JSON output record for source file %s (%s)'%(self.source, str(e)))
+
+class ParseDBTaskStage2(BaseParseTask):
+    '''
+    Class to push Prefetch file information to database
+    '''
+    def extract_resultset(self, worker):
+        '''
+        @BaseParseTask.extract_resultset
+        '''
+        self.result_set = list()
+        for pf in self.source:
+            try:
+                ledger = db.FileLedger().populate_fields(pf.get_metadata())
+            except Exception as e:
+                Logger.error('Failed to get metadata from %s (%s)'%(pf.filepath, str(e)))
+            else:
+                try:
+                    ledger.header = db.Header().populate_fields(pf.header)
+                except Exception as e:
+                    Logger.error('Failed to get header information from %s (%s)'(pf.filepath, str(e)))
+                else:
+                    try:
+                        ledger.header.file_info = db.FileInformation().populate_fields(pf.file_info)
+                        for last_execution_time in pf.file_info.LastExecutionTime:
+                            try:
+                                ledger.header.file_info.last_execution_times.append(\
+                                    db.LastExecutionTime(last_execution_time=last_execution_time)\
+                                )
+                            except Exception as e:
+                                Logger.error('Failed to add last execution time entry from %s (%s)'%(pf.filepath, str(e)))
+                    except Exception as e:
+                        Logger.error('Failed to get file information from %s (%s)'%(pf.filepath, str(e)))
+                    else:
+                        try:
+                            for file_metric, file_name in zip(pf.file_metrics, pf.filename_strings):
+                                try:
+                                    db_file_metric = db.FileMetric().populate_fields(file_metric)
+                                    db_file_metric.file_name = db.FileMetricsName(file_name=file_name)
+                                    db_file_metric.file_reference = db.FileReference().populate_fields(file_metric.FileReference)
+                                    ledger.header.file_metrics.append(db_file_metric)
+                                except Exception as e:
+                                    Logger.error('Failed to add file metrics entry from %s (%s)'%(pf.filepath, str(e)))
+                        except Exception as e:
+                            Logger.error('Failed to get file metrics information from %s (%s)'%(pf.filepath, str(e)))
+                        else:
+                            try:
+                                for trace_chain in pf.trace_chains:
+                                    try:
+                                        ledger.header.trace_chains.append(\
+                                            db.TraceChain().populate_fields(trace_chain)\
+                                        )
+                                    except Exception as e:
+                                        Logger.error('Failed to add trace chains entry from %s (%s)'%(pf.filepath, str(e)))
+                            except Exception as e:
+                                Logger.error('Failed to get trace chains information from %s (%s)'%(pf.filepath, str(e)))
+                            else:
+                                try:
+                                    for volumes_info, file_references, directory_strings in zip(pf.volumes_info, pf.file_references, pf.directory_strings):
+                                        db_volumes_info = db.VolumesInformation().populate_fields(volumes_info)
+                                        for file_reference in file_references:
+                                            try:
+                                                db_volumes_info.file_references.append(\
+                                                    db.FileReference().populate_fields(file_reference)\
+                                                )
+                                            except Exception as e:
+                                                Logger.error('Failed to add file reference to volumes info from %s (%s)'%(pf.filepath, str(e)))
+                                        for directory_string in directory_strings:
+                                            try:
+                                                db_volumes_info.directory_strings.append(\
+                                                    db.DirectoryString(string=directory_string)\
+                                                )
+                                            except Exception as e:
+                                                Logger.error('Failed to add directory string to volumes info from %s (%s)'%(pf.filepath, str(e)))
+                                        ledger.header.volumes_info.append(db_volumes_info)
+                                except Exception as e:
+                                    Logger.error('Failed to get volumes information from %s (%s)'%(pf.filepath, str(e)))
+                                else:
+                                    self.result_set.append(ledger)
+    def process_resultset(self, worker):
+        '''
+        @BaseParseTask.process_resultset
+        '''
+        if worker.manager.session is None:
+            worker.manager.create_session()
+        for result in self.result_set:
+            try:
+                worker.manager.add(result)
+                worker.manager.commit()
+            except Exception as e:
+                Logger.error('Failed to commit result to database (%s)'%str(e))
+        return True
+
+class ParseDBTaskStage1(BaseParseTask):
+    '''
+    Task class to parse single Prefetch file in preparation for insertion into DB
+    '''
+    def extract_resultset(self, worker):
+        '''
+        @BaseParseTask.extract_resultset
+        '''
+        self.result_set = list()
+        try:
+            pf = Prefetch(self.source)
+            pf.parse()
+        except Exception as e:
+            Logger.error('Failed to parse Prefetch file %s (%s)'%(self.source, str(e)))
+        else:
+            try:
+                self.result_set.append(ParseDBTaskStage2(result))
+            except Exception as e:
+                Logger.error('Failed to create JSON output record for source file %s (%s)'%(self.source, str(e)))
+    def process_resultset(self, worker):
+        '''
+        @BaseParseTask.process_resultset
+        '''
+        return self.result_set

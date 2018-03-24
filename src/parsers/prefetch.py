@@ -23,29 +23,22 @@
 
 import logging
 Logger = logging.getLogger(__name__)
-from os import path, stat
+from os import path
 from io import BytesIO
 import inspect
 from construct.lib import Container
+import hashlib
 from datetime import datetime
+from dateutil.tz import tzlocal, tzutc
 
 from .decompress import DecompressWin10
 import src.structures.prefetch as pfstructs
 from src.utils.time import WindowsTime
-from src.utils.item import BaseItem, Field
 
-class Prefetch(BaseItem):
+class Prefetch(Container):
     '''
     Class for parsing Windows prefetch files
     '''
-    header              = Field(1)
-    file_info           = Field(2)
-    file_metrics        = Field(3)
-    trace_chains        = Field(4)
-    filename_strings    = Field(5)
-    volumes_info        = Field(6)
-    file_references     = Field(7)
-    directory_strings   = Field(8)
 
     def __init__(self, filepath, load=False):
         super(Prefetch, self).__init__()
@@ -385,6 +378,7 @@ class Prefetch(BaseItem):
         try:
             hash = getattr(hashlib, algorithm)()
         except Exception as e:
+            raise
             Logger.error('Unable to obtain %s hash of prefetch file (%s)'%(algorithm, str(e)))
             return None
         else:
@@ -415,7 +409,6 @@ class Prefetch(BaseItem):
             simple_hash is of type Boolean
         '''
         assert isinstance(simple_hash, bool), 'Simple_hash is of type Boolean'
-        pf_stat = stat(self.filepath)
         return Container(\
             file_name=path.basename(self.filepath),
             file_path=path.abspath(self.filepath),
@@ -423,9 +416,9 @@ class Prefetch(BaseItem):
             md5hash=self._hash_file('md5') if not simple_hash else None,
             sha1hash=self._hash_file('sha1') if not simple_hash else None,
             sha2hash=self._hash_file('sha256'),
-            modify_time=pf_stat.st_mtime,
-            access_time=pf_stat.st_atime,
-            create_time=pf_stat.st_ctime\
+            modify_time=datetime.fromtimestamp(path.getmtime(self.filepath), tzlocal()).astimezone(tzutc()),
+            access_time=datetime.fromtimestamp(path.getatime(self.filepath), tzlocal()).astimezone(tzutc()),
+            create_time=datetime.fromtimestamp(path.getctime(self.filepath), tzlocal()).astimezone(tzutc())\
         )
     def get_stream(self, persist=False):
         '''

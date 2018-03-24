@@ -213,6 +213,20 @@ class ProgressTrackerWorker(LoggedQueueWorker):
         '''
         self._progress.close()
 
+class DBProgressTrackerWorker(ProgressTrackerWorker):
+    '''
+    @BaseQueueWorker
+    '''
+    def __init__(self, *args, manager=None, **kwargs):
+        super(DBProgressTrackerWorker, self).__init__(*args, **kwargs)
+        self.manager = manager
+    def _postamble(self):
+        '''
+        @BaseQueueWorker._postamble
+        '''
+        super(DBProgressTrackerWorker, self)._postamble()
+        self.manager.close_session()
+
 class WorkerPool(object):
     '''
     Class to manage pool of process workers

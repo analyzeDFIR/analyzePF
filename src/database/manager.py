@@ -34,11 +34,11 @@ class DBManager(object):
     '''
     def __init__(self, conn_string=None, metadata=None, session_factory=None, session=None, scoped=False):
         self._conn_string = conn_string
-        self._engine = engine
         self._metadata = metadata
         self._session_factory = session_factory
         self._session = session
         self._scoped_sessions = scoped
+        self._engine = None
     @property
     def conn_string(self):
         '''
@@ -82,6 +82,7 @@ class DBManager(object):
             conn_string is of type String
             persist is of type Boolean
         '''
+        assert isinstance(conn_string, (type(None), str)), 'Conn_string is not of type String'
         assert isinstance(persist, bool), 'Persist is not of type Boolean'
         if conn_string is not None:
             self.conn_string = conn_string
@@ -103,7 +104,7 @@ class DBManager(object):
         Preconditions:
             value is of type MetaData
         '''
-        assert isinstance(value, MetaData)
+        assert value is None or isinstance(value, MetaData)
         self._metadata = value
     @property
     def session_factory(self):
@@ -118,22 +119,20 @@ class DBManager(object):
         Preconditions:
             value is of type Callable
         '''
-        assert callable(value)
+        assert value is None or callable(value)
         self._session_factory = value
     @property
     def session(self):
         '''
         @_session.getter
         '''
-        if self._session is None:
-            return self.create_session(False)
         return self._session
     @session.setter
     def session(self, value):
         '''
         @_session.setter
         '''
-        assert isinstance(value, Session)
+        assert isinstance(value, (type(None), Session))
         self._session = value
     def create_session(self, persist=True):
         '''
@@ -154,7 +153,7 @@ class DBManager(object):
             if self.session is None:
                 self.session = self.session_factory()
             return self.session
-        return self._create_session()
+        return self.session_factory()
     def close_session(self, session=None):
         '''
         Args:
@@ -213,7 +212,7 @@ class DBManager(object):
         try:
             if conn_string is not None:
                 self.conn_string = conn_string
-                self.create_engine()
+            self.create_engine()
             if metadata is not None:
                 self.metadata = metadata
             if self.engine is not None:
