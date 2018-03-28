@@ -179,6 +179,7 @@ class BaseParseFileOutputDirective(BaseDirective):
             progress_pool = parallel.WorkerPool(\
                 parallel.JoinableQueue(-1), 
                 None,
+                daemonize=False, 
                 worker_class=parallel.ProgressTrackerWorker,
                 worker_count=1,
                 worker_kwargs=dict(\

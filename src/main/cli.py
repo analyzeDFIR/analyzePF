@@ -71,15 +71,15 @@ def initialize_parser():
 
     ## Base output parent
     base_output_parent = ArgumentParser(add_help=False)
-    base_output_parent.add_argument('-t', '--target', type=str, help='Path to output file', dest='target')
+    base_output_parent.add_argument('-t', '--target', type=str, required=True, help='Path to output file', dest='target')
 
     ## CSV output parent parser
     csv_output_parent = ArgumentParser(parents=[base_output_parent], add_help=False)
-    csv_output_parent.add_argument('--sep', default=',', help='Output file separator', dest='sep')
+    csv_output_parent.add_argument('-S', '--sep', default=',', help='Output file separator (default: ",")', dest='sep')
 
     ## Bodyfile output parent parser
     body_output_parent = ArgumentParser(parents=[base_output_parent], add_help=False)
-    body_output_parent.add_argument('--sep', default='|', choices=['|'], help='Output file separator', dest='sep')
+    body_output_parent.add_argument('-S', '--sep', default='|', choices=['|'], help='Output file separator (default: "|")', dest='sep')
 
     ## DB connect parent parser
     db_connect_parent = ArgumentParser(add_help=False)

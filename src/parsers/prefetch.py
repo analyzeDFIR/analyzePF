@@ -451,7 +451,17 @@ class Prefetch(Container):
         return self._clean_transform(self, serialize=True)
     def parse_structure(self, structure, *args, stream=None, **kwargs):
         '''
+        Args:
+            structure: String               => structure to parse
+            stream: TextIOWrapper|BytesIO   => stream to parse structure from
+        Returns:
+            Container
+            Parsed structure if parsed successfully, None otherwise
+        Preconditions:
+            structure is of type String
+            stream is of type TextIOWrapper|BytesIO (assumed True)
         '''
+        assert isinstance(structure, str), 'Structure is not of type String'
         if stream is None:
             stream = self._stream
         structure_parser = getattr(self, '_parse_' + structure, None)
@@ -478,9 +488,9 @@ class Prefetch(Container):
             header, file information, file metrics, trace chains,
             filename strings, and volumes information
         Preconditions:
-            self._filepath points to valid prefetch file
+            self._filepath points to valid prefetch file    (assumed True)
         '''
-        self._stream = self.get_stream()
+        self.get_stream(True)
         try:
             self.header = self.parse_structure('header')
             self.file_info = self.parse_structure('file_info')
@@ -492,7 +502,6 @@ class Prefetch(Container):
             self.directory_strings = self.parse_structure('directory_strings')
             return self
         finally:
-            try:
+            if self._stream is not None:
                 self._stream.close()
-            except:
-                pass
+                self._stream = None

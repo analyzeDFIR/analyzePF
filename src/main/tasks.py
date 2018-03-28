@@ -26,7 +26,7 @@ Logger = logging.getLogger(__name__)
 from os import path, stat
 from datetime import datetime, timezone, timedelta
 from json import dumps
-from construct import Container
+from construct.lib import Container
 
 from src.parsers.prefetch import Prefetch
 import src.database.models as db
