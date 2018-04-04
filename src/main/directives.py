@@ -29,6 +29,7 @@ from glob import glob
 from argparse import Namespace
 from time import sleep
 from tqdm import tqdm
+from sqlalchemy.sql.expression import text
 
 from src.utils.config import initialize_logger, synthesize_log_path
 from src.utils.registry import RegistryMetaclassMixin 
@@ -111,17 +112,17 @@ class BaseDirective(object, metaclass=DirectiveRegistry):
         Preconditions:
             args is of type Namespace
             args.log_path is of type String
-            args.log_prefix is of type String
-            args.threads is of type Integer > 0
+            args.count is of type Integer       (optional)
+            args.threads is of type Integer > 0 (optional)
             ** Any other preconditions must be checked by subclasses
         '''
         assert isinstance(args, Namespace), 'Args is not of type Namespace'
         assert hasattr(args, 'log_path'), 'Args does not contain log_path attribute'
         assert hasattr(args, 'log_prefix'), 'Args does not contain log_prefix attribute'
-        assert hasattr(args, 'threads'), 'Args does not contain threads attribute'
-        assert args.threads > 0, 'Threads is not greater than 0'
-        if args.threads > parallel.CPU_COUNT:
-            args.threads = parallel.CPU_COUNT
+        if hasattr(args, 'threads'):
+            assert args.threads > 0, 'Threads is not greater than 0'
+            if args.threads > parallel.CPU_COUNT:
+                args.threads = parallel.CPU_COUNT
         initialize_logger(args.log_path)
         Logger.info('BEGIN: %s'%cls.__name__)
         cls.run(args)
@@ -328,9 +329,9 @@ class ParseJSONDirective(BaseParseFileOutputDirective):
         '''
         super(ParseJSONDirective, cls).run(args)
 
-class ParseDBDirective(BaseDirective):
+class DBConnectionMixin(object):
     '''
-    Directive for parsing Prefetch file to DB format
+    Mixin class for directives that connect to a database
     '''
     @staticmethod
     def _prepare_conn_string(args):
@@ -359,6 +360,11 @@ class ParseDBDirective(BaseDirective):
                 args.db_port + \
                 '/' + \
                 args.db_name
+
+class ParseDBDirective(BaseDirective, DBConnectionMixin):
+    '''
+    Directive for parsing Prefetch file to DB format
+    '''
     @classmethod
     def run(cls, args):
         '''
@@ -435,3 +441,60 @@ class ParseDBDirective(BaseDirective):
                 worker_pool.join_workers()
         finally:
             manager.close_session()
+
+class DBQueryDirective(BaseDirective, DBConnectionMixin):
+    '''
+    Directive for querying a DB
+    '''
+    @classmethod
+    def run(cls, args):
+        '''
+        Args:
+            @BaseDirective.run_directive
+            @ParseDBDirective.run (args.db_*)
+            @ParseCSVDirective.run (args.target, args.sep)
+            args.query: String  => database query to submit
+        Procedure:
+            Query $MFT information from database
+        Preconditions:
+            @BaseDirective.run_directive
+            @ParseDBDirective.run (args.db_*)
+            @ParseCSVDirective.run (args.target, args.sep)
+            args.query is of type String
+        '''
+        assert isinstance(args.query, str), 'Query is not of type String'
+        if args.target is not None:
+            assert path.isdir(path.dirname(args.target)), 'Target does not point to existing directory'
+        conn_string = cls._prepare_conn_string(args)
+        manager = DBManager(conn_string=conn_string, metadata=BaseTable.metadata)
+        try:
+            manager.initialize(create_session=True)
+        except Exception as e:
+            Logger.error('Failed to initialize DBManager (%s)'%str(e))
+        else:
+            try:
+                result_proxy = manager.session.execute(text(args.query))
+            except Exception as e:
+                Logger.error('Failed to submit query to database (%s)'%(str(e)))
+            else:
+                headers = result_proxy.keys()
+                resultset = result_proxy.fetchall()
+                if len(resultset) > 0:
+                    if args.target is not None:
+                        args.target = path.abspath(args.target)
+                        try:
+                            with open(args.target, 'a') as target:
+                                target.write(args.sep.join(headers))
+                                for result in resultset:
+                                    try:
+                                        target.write(args.sep.join([str(item) for item in result]))
+                                    except Exception as e:
+                                        Logger.error('Failed to write result to output file %s (%s)'%(args.target, str(e)))
+                        except Exception as e:
+                            Logger.error('Failed to write results to output file %s (%s)'%(args.target, str(e)))
+                    else:
+                        print(args.sep.join(headers))
+                        for result in resultset:
+                            print(args.sep.join([str(item) for item in result]))
+                else:
+                    Logger.info('No results found for query %s'%args.query)

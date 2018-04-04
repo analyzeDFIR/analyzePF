@@ -66,8 +66,11 @@ def initialize_parser():
     base_parent = ArgumentParser(add_help=False)
     base_parent.add_argument('--lpath', type=str, default=path.abspath(path.dirname(sys.argv[0])), help='Path to log file directory (i.e. /path/to/logs or C:\\Users\\<user>\\Documents\\)', dest='log_path')
     base_parent.add_argument('--lpref', type=str, default=None, help='Prefix for log file (default: apf_<date>)', dest='log_prefix')
-    base_parent.add_argument('-s', '--source', action='append', help='Path to input file(s)', dest='sources')
-    base_parent.add_argument('--threads', type=int, default=1, help='Number of threads to use', dest='threads')
+
+    ## Base parse parent
+    base_parse_parent = ArgumentParser(add_help=False)
+    base_parse_parent.add_argument('-s', '--source', action='append', help='Path to input file(s)', dest='sources')
+    base_parse_parent.add_argument('--threads', type=int, default=1, help='Number of threads to use', dest='threads')
 
     ## Base output parent
     base_output_parent = ArgumentParser(add_help=False)
@@ -96,7 +99,7 @@ def initialize_parser():
     parse_subdirectives = parse_directive.add_subparsers()
 
     # CSV parse directive
-    csv_parse_directive = parse_subdirectives.add_parser('csv', parents=[base_parent, csv_output_parent], help='Parse prefetch file to csv')
+    csv_parse_directive = parse_subdirectives.add_parser('csv', parents=[base_parent, base_parse_parent, csv_output_parent], help='Parse prefetch file to csv')
     csv_parse_directive.add_argument('info_type', \
         type=str, \
         default='summary', \
@@ -105,16 +108,16 @@ def initialize_parser():
     csv_parse_directive.set_defaults(func=DirectiveRegistry.retrieve('ParseCSVDirective'))
     
     # Bodyfile parse directive
-    body_parse_directive = parse_subdirectives.add_parser('body', parents=[base_parent, body_output_parent], help='Parse prefetch MAC times to bodyfile')
+    body_parse_directive = parse_subdirectives.add_parser('body', parents=[base_parent, base_parse_parent, body_output_parent], help='Parse prefetch MAC times to bodyfile')
     body_parse_directive.set_defaults(func=DirectiveRegistry.retrieve('ParseBODYDirective'))
 
     # JSON parse directive
-    json_parse_directive = parse_subdirectives.add_parser('json', parents=[base_parent, base_output_parent], help='Parse prefetch file to JSON')
+    json_parse_directive = parse_subdirectives.add_parser('json', parents=[base_parent, base_parse_parent, base_output_parent], help='Parse prefetch file to JSON')
     json_parse_directive.add_argument('-p', '--pretty', action='store_true', help='Whether to pretty-print the JSON output', dest='pretty')
     json_parse_directive.set_defaults(func=DirectiveRegistry.retrieve('ParseJSONDirective'))
 
     # Database parse directive
-    db_parse_directive = parse_subdirectives.add_parser('db', parents=[base_parent, db_connect_parent], help='Parse prefetch file to database')
+    db_parse_directive = parse_subdirectives.add_parser('db', parents=[base_parent, base_parse_parent, db_connect_parent], help='Parse prefetch file to database')
     db_parse_directive.set_defaults(func=DirectiveRegistry.retrieve('ParseDBDirective'))
 
     ## Convert directives
@@ -126,5 +129,12 @@ def initialize_parser():
 
     # DB conversion directive
     db_convert_directive = convert_subdirectives.add_parser('db', parents=[base_parent], help='Convert from database output')
+
+    ## Query directive
+    query_directive = main_directives.add_parser('query', parents=[base_parent, db_connect_parent], help='Submit queries to $MFT database')
+    query_directive.add_argument('-t', '--target', type=str, help='Path to output file', dest='target')
+    query_directive.add_argument('-S', '--sep', default=',', help='Output file separator (default: ",")', dest='sep')
+    query_directive.add_argument('-q', '--query', type=str, required=True, help='Query to submit to database', dest='query')
+    query_directive.set_defaults(func=DirectiveRegistry.retrieve('DBQueryDirective'))
 
     return main_parser
