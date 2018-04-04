@@ -380,7 +380,6 @@ class Prefetch(Container):
         try:
             hash = getattr(hashlib, algorithm)()
         except Exception as e:
-            raise
             Logger.error('Unable to obtain %s hash of prefetch file (%s)'%(algorithm, str(e)))
             return None
         else:
