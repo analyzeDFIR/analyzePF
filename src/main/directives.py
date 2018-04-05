@@ -30,6 +30,7 @@ from argparse import Namespace
 from time import sleep
 from tqdm import tqdm
 from sqlalchemy.sql.expression import text
+from terminaltables import AsciiTable
 
 from src.utils.config import initialize_logger, synthesize_log_path
 from src.utils.registry import RegistryMetaclassMixin 
@@ -454,6 +455,7 @@ class DBQueryDirective(BaseDirective, DBConnectionMixin):
             @ParseDBDirective.run (args.db_*)
             @ParseCSVDirective.run (args.target, args.sep)
             args.query: String  => database query to submit
+            args.title: String  => title of table
         Procedure:
             Query $MFT information from database
         Preconditions:
@@ -461,6 +463,7 @@ class DBQueryDirective(BaseDirective, DBConnectionMixin):
             @ParseDBDirective.run (args.db_*)
             @ParseCSVDirective.run (args.target, args.sep)
             args.query is of type String
+            args.title is of type String
         '''
         assert isinstance(args.query, str), 'Query is not of type String'
         if args.target is not None:
@@ -493,8 +496,17 @@ class DBQueryDirective(BaseDirective, DBConnectionMixin):
                         except Exception as e:
                             Logger.error('Failed to write results to output file %s (%s)'%(args.target, str(e)))
                     else:
-                        print(args.sep.join(headers))
-                        for result in resultset:
-                            print(args.sep.join([str(item) for item in result]))
+                        if sys.stdout.isatty():
+                            table_data = [headers]
+                            for result in resultset:
+                                table_data.append([str(item) for item in result])
+                            table = AsciiTable(table_data)
+                            if args.title:
+                                table.title = args.title
+                            print(table.table)
+                        else:
+                            print(args.sep.join(headers))
+                            for result in resultset:
+                                print(args.sep.join([str(item) for item in result]))
                 else:
                     Logger.info('No results found for query %s'%args.query)

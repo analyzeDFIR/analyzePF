@@ -120,21 +120,23 @@ def initialize_parser():
     db_parse_directive = parse_subdirectives.add_parser('db', parents=[base_parent, base_parse_parent, db_connect_parent], help='Parse prefetch file to database')
     db_parse_directive.set_defaults(func=DirectiveRegistry.retrieve('ParseDBDirective'))
 
-    ## Convert directives
-    convert_directives = main_directives.add_parser('convert', help='Parsed prefetch file output conversion directives')
-    convert_subdirectives = convert_directives.add_subparsers()
-    
-    # JSON conversion directive
-    json_convert_directive = convert_subdirectives.add_parser('json', parents=[base_parent], help='Convert from JSON output')
+    #TODO: implement conversion directives
+    ### Convert directives
+    #convert_directives = main_directives.add_parser('convert', help='Parsed prefetch file output conversion directives')
+    #convert_subdirectives = convert_directives.add_subparsers()
+    #
+    ## JSON conversion directive
+    #json_convert_directive = convert_subdirectives.add_parser('json', parents=[base_parent], help='Convert from JSON output')
 
-    # DB conversion directive
-    db_convert_directive = convert_subdirectives.add_parser('db', parents=[base_parent], help='Convert from database output')
+    ## DB conversion directive
+    #db_convert_directive = convert_subdirectives.add_parser('db', parents=[base_parent], help='Convert from database output')
 
     ## Query directive
     query_directive = main_directives.add_parser('query', parents=[base_parent, db_connect_parent], help='Submit queries to $MFT database')
     query_directive.add_argument('-t', '--target', type=str, help='Path to output file', dest='target')
-    query_directive.add_argument('-S', '--sep', default=',', help='Output file separator (default: ",")', dest='sep')
     query_directive.add_argument('-q', '--query', type=str, required=True, help='Query to submit to database', dest='query')
+    query_directive.add_argument('-S', '--sep', default=',', help='Output file separator (default: ",")', dest='sep')
+    query_directive.add_argument('-T', '--title', type=str, help='Title to use for output table', dest='title')
     query_directive.set_defaults(func=DirectiveRegistry.retrieve('DBQueryDirective'))
 
     return main_parser
