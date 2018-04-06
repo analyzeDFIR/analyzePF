@@ -47,6 +47,21 @@ def DBConnectConfig(arg):
     except Exception as e:
         raise ArgumentTypeError(str(e))
 
+def FileFormatList(arg):
+    '''
+    Args:
+        arg: String => comma-separated file format types
+    Returns:
+        Database connection string
+    Preconditions:
+        arg is of type String   (assumed True)
+    '''
+    try:
+        file_formats = set(['csv', 'body', 'json'])
+        return [item for item in arg.strip().split(',') if item in file_formats] 
+    except Exception as e:
+        raise ArgumentTypeError(str(e))
+
 def initialize_parser():
     '''
     Args:
@@ -115,6 +130,13 @@ def initialize_parser():
     json_parse_directive = parse_subdirectives.add_parser('json', parents=[base_parent, base_parse_parent, base_output_parent], help='Parse prefetch file to JSON')
     json_parse_directive.add_argument('-p', '--pretty', action='store_true', help='Whether to pretty-print the JSON output', dest='pretty')
     json_parse_directive.set_defaults(func=DirectiveRegistry.retrieve('ParseJSONDirective'))
+
+    # File parse directive
+    file_parse_directive = parse_subdirectives.add_parser('file', parents=[base_parent, base_parse_parent, csv_output_parent], help='Parse Prefetch file to multiple output formats')
+    file_parse_directive.add_argument('-f', '--format', type=FileFormatList, required=True, help='Comma-separated list of output formats (choices: csv, body, and json)', dest='formats')
+    file_parse_directive.add_argument('-p', '--pretty', action='store_true', help='Whether to pretty-print the JSON output', dest='pretty')
+    file_parse_directive.add_argument('-i', '--info-type', type=str, help='Information type for CSV output', dest='info_type')
+    file_parse_directive.set_defaults(func=DirectiveRegistry.retrieve('ParseFILEDirective'))
 
     # Database parse directive
     db_parse_directive = parse_subdirectives.add_parser('db', parents=[base_parent, base_parse_parent, db_connect_parent], help='Parse prefetch file to database')

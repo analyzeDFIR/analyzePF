@@ -311,19 +311,28 @@ class WorkerPool(object):
         '''
         assert isinstance(value, dict), 'Value is not of type Dict<String, Any>'
         self._task_kwargs = value
-    def add_task(self, *args, poison_pill=False, **kwargs):
+    def add_task(self, *args, poison_pill=False, included=False, **kwargs):
         '''
         Args:
             N/A
         Procedure:
             Add task to task queue
+            NOTE:
+                if poison_pill is True, None is added
+                if include is True, assumes first arg is already-created Task
+                else, self._task_class is used to create Task
         Preconditions:
             N/A
         '''
         action = 'put'
-        task_args = dict(kwargs)
-        task_args.update(self._task_kwargs)
-        task = self._task_class(*args, **task_args) if not poison_pill else None
+        if poison_pill:
+            task = None
+        elif included:
+            task = args[0]
+        else:
+            task_args = dict(kwargs)
+            task_args.update(self._task_kwargs)
+            task = self._task_class(*args, **task_args)
         getattr(self._queue, action)(task)
     def add_poison_pills(self):
         '''
