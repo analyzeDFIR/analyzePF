@@ -25,6 +25,21 @@ import logging
 from os import path, getpid
 from collections import defaultdict
 
+def closeFileHandlers(logger=logging.root):
+    '''
+    Args:
+        logger: logging.Logger  => logger to add handler to
+    Procedure:
+        Close all handlers attached to logger pointing to files (handlers that subclass FileHandler)
+    Preconditions:
+        logger is subclass of logging.Logger    (assumed True)
+    '''
+    for handler in logger.handlers:
+        if issubclass(type(handler), logging.FileHandler):
+            if hasattr(handler, 'close') and callable(handler.close):
+                handler.close()
+                logger.removeHandler(handler)
+
 def addProcessScopedHandler(filename, logger=logging.root, mode='a', encoding='UTF-8'):
     '''
     Args:

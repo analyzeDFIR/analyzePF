@@ -35,6 +35,7 @@ from terminaltables import AsciiTable
 
 from src.utils.config import initialize_logger, synthesize_log_path
 from src.utils.registry import RegistryMetaclassMixin 
+from src.utils.logging import closeFileHandlers
 import src.utils.parallel as parallel
 import src.main.tasks as tasks
 from src.database.manager import DBManager
@@ -123,6 +124,7 @@ class BaseDirective(object, metaclass=DirectiveRegistry):
         sleep(0.5)
         Logger.info('END: %s'%type(self).__name__)
         logging.shutdown()
+        closeFileHandlers()
         log_path = synthesize_log_path(self.args.log_path, self.args.log_prefix)
         parallel.coalesce_files(path.join(self.args.log_path, '*_tmp_apf.log'), log_path)
 
@@ -622,6 +624,8 @@ class ParseDBDirective(ParseDirectiveMixin, BaseDirective, DBConnectionMixin):
         self.conn_string = self._prepare_conn_string(self.args)
         self.manager = DBManager(conn_string=self.conn_string, metadata=BaseTable.metadata)
         self.manager.initialize(bootstrap=True)
+        self.manager.engine.dispose()
+        self.manager = None
     def _prepare_frontier(self):
         '''
         @ParseDirectiveMixin._prepare_frontier
@@ -649,7 +653,7 @@ class ParseDBDirective(ParseDirectiveMixin, BaseDirective, DBConnectionMixin):
                 pcount=len(self.frontier),
                 pdesc='Total',
                 punit='files',
-                manager=self.manager\
+                manager=DBManager(conn_string=self.conn_string)\
             )\
         )
         self.pools.parser = parallel.WorkerPool(\
@@ -671,20 +675,17 @@ class ParseDBDirective(ParseDirectiveMixin, BaseDirective, DBConnectionMixin):
         '''
         @ParseDirectiveMixin._parse_loop
         '''
-        try:
-            self.pools.progress.start()
-            self.pools.parser.start()
-            for nodeidx, node in enumerate(self.frontier):
-                Logger.info('Parsing prefetch file %s (node %d)'%(node, nodeidx))
-                self.pools.parser.add_task(node)
-            self.pools.parser.join_tasks()
-            self.pools.progress.join_tasks()
-            self.pools.progress.add_poison_pills()
-            self.pools.progress.join_workers()
-            self.pools.parser.add_poison_pills()
-            self.pools.parser.join_workers()
-        finally:
-            self.manager.close_session()
+        self.pools.progress.start()
+        self.pools.parser.start()
+        for nodeidx, node in enumerate(self.frontier):
+            Logger.info('Parsing prefetch file %s (node %d)'%(node, nodeidx))
+            self.pools.parser.add_task(node)
+        self.pools.parser.join_tasks()
+        self.pools.progress.join_tasks()
+        self.pools.progress.add_poison_pills()
+        self.pools.progress.join_workers()
+        self.pools.parser.add_poison_pills()
+        self.pools.parser.join_workers()
     def _parse_postamble(self):
         '''
         @ParseDirectiveMixin._parse_postamble
