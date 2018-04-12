@@ -558,7 +558,7 @@ class ParseFILEDirective(BaseParseFileOutputDirective):
                 if fmt == 'csv':
                     kwargs['info_type'] = self.args.info_type
             else:
-                kwargs['pretty'] = self.args.pretty
+                kwargs['pretty'] = self.args.pretty if self.args.threads == 1 else False
             self.pools.parser.add_task(\
                 getattr(tasks, 'Parse' + fmt.upper() + 'Task')(\
                     node,
