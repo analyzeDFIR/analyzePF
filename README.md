@@ -2,7 +2,7 @@
 
 ## What is analyzePF?
 
-[analyzePF](https://github.com/noahrubin/analyzePF) is a command line tool for parsing information from Prefetch files taken from systems running Windows.  The tools was written to parse as much information from Prefetch files as possible in the most accurate way possible, and is written with the same four goals in mind as [analyzeMFT](https://github.com/noahrubin/analyzeMFT/tree/rewrite2018) (substituting Prefetch for Prefetch).
+[analyzePF](https://github.com/noahrubin/analyzePF) is a command line tool for parsing information from Prefetch files taken from systems running Windows.  The tool was written to parse as much information from Prefetch files as possible in the most accurate way possible, and is written with the same four goals in mind as [analyzeMFT](https://github.com/noahrubin/analyzeMFT/tree/rewrite2018) (substituting $MFT for Prefetch).
 
 ## Installation
 
