@@ -2,21 +2,21 @@
 
 ## What is analyzePF?
 
-[analyzePF](https://github.com/noahrubin/analyzePF) is a command line tool for parsing information from Prefetch files taken from systems running Windows.  The tool was written to parse as much information from Prefetch files as possible in the most accurate way possible, and is written with the same four goals in mind as [analyzeMFT](https://github.com/noahrubin/analyzeMFT/tree/rewrite2018) (substituting $MFT for Prefetch).
+[analyzePF](https://github.com/analyzeDFIR/analyzePF) is a command line tool for parsing information from Prefetch files taken from systems running Windows.  The tool was written to parse as much information from Prefetch files as possible in the most accurate way possible, and is written with the same four goals in mind as [analyzeMFT](https://github.com/analyzeDFIR/analyzeMFT/tree/rewrite2018) (substituting $MFT for Prefetch).
 
 ## Installation
 
 This version of analyzePF is not yet available on PyPi, so it can be cloned via the following:
 
 ```bash
-$ git clone git@github.com:noahrubin/analyzePF.git # (or https://github.com/noahrubin/analyzePF.git)
+$ git clone git@github.com:analyzeDFIR/analyzePF.git # (or https://github.com/analyzeDFIR/analyzePF.git)
 $ cd analyzePF
 $ ./apf.py -h # show CLI usage
 ```
 
 ## Dependencies
 
-All of the core dependencies beside [six](https://pypi.python.org/pypi/six) come shipped with analyzePF in the [lib/](https://github.com/noahrubin/analyzePF/tree/master/lib) directory, and the application uses those by default.  If there is a consensus that users want the ability to use already-installed versions of those packages (i.e. in a virtualenv), that change can be made easily.  Thus, the only potential dependencies are database drivers for SQLAlchemy to use.  See below:
+All of the core dependencies beside [six](https://pypi.python.org/pypi/six) come shipped with analyzePF in the [lib/](https://github.com/analyzeDFIR/analyzePF/tree/master/lib) directory, and the application uses those by default.  If there is a consensus that users want the ability to use already-installed versions of those packages (i.e. in a virtualenv), that change can be made easily.  Thus, the only potential dependencies are database drivers for SQLAlchemy to use.  See below:
 
 | RDBMS Name | SQLAlchemy Link |
 |------------|-----------------|
@@ -215,22 +215,22 @@ Due to the relational nature of the Prefetch, the various file formats output di
 
 | Field | Description |
 |-------|-------------|
-| Version | See [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchVersion) |
-| Signature | See [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchHeader) |
-| ExecutableName | See [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchHeader) |
-| PrefetchHash | See [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchHeader) |
-| SectionAEntriesCount | See [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchFileInformation*) |
-| SectionBEntriesCount | See [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchFileInformation*) |
-| SectionCLength | See [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchFileInformation*) |
-| SectionDEntriesCount | See [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchFileInformation*) |
+| Version | See [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchVersion) |
+| Signature | See [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchHeader) |
+| ExecutableName | See [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchHeader) |
+| PrefetchHash | See [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchHeader) |
+| SectionAEntriesCount | See [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchFileInformation*) |
+| SectionBEntriesCount | See [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchFileInformation*) |
+| SectionCLength | See [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchFileInformation*) |
+| SectionDEntriesCount | See [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchFileInformation*) |
 | LastExecutionTime | Most recent last execution time entry |
-| ExecutionCount | See [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchFileInformation*) |
-| VolumeDevicePath | "\|"-separated list of volume device paths (see [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) - PrefetchVolumeInformation*) |
-| VolumeCreateTime | "\|"-separated list of volume create times (see [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) - PrefetchVolumeInformation*) |
-| VolumeSerialNumber | "\|"-separated list of volume serial numbers (see [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) - PrefetchVolumeInformation*) |
-| FileMetricsArrayCount | Count of file metrics entries (see [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) - PrefetchFileMetricsEntry*) |
-| TraceChainArrayCount | Count of trace chain entries (see [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) - PrefetchTraceChainEntry) |
-| FileReferenceCount | Count of $MFT file References (see [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) - PrefetchFileReferences) |
+| ExecutionCount | See [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchFileInformation*) |
+| VolumeDevicePath | "\|"-separated list of volume device paths (see [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) - PrefetchVolumeInformation*) |
+| VolumeCreateTime | "\|"-separated list of volume create times (see [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) - PrefetchVolumeInformation*) |
+| VolumeSerialNumber | "\|"-separated list of volume serial numbers (see [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) - PrefetchVolumeInformation*) |
+| FileMetricsArrayCount | Count of file metrics entries (see [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) - PrefetchFileMetricsEntry*) |
+| TraceChainArrayCount | Count of trace chain entries (see [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) - PrefetchTraceChainEntry) |
+| FileReferenceCount | Count of $MFT file References (see [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) - PrefetchFileReferences) |
 | DirectoryStringsCount | Count of directory strings (associated with volume information entry) |
 | FileNameStrings | "\|"-separated list of filename strings (associated with file metrics entry) |
 
@@ -262,18 +262,18 @@ The JSON format is an unordered collection of data parsed from each Prefetch ent
 
 | Key Name | Description |
 |----------|-------------|
-| header | See [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchHeader)|
-| file_info | See [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchFileInformation*) |
-| file_metrics | See [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchFileMetrics*) |
+| header | See [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchHeader)|
+| file_info | See [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchFileInformation*) |
+| file_metrics | See [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchFileMetrics*) |
 | filename_strings | List of filenames associated with file metrics array entries |
-| trace_chains | See [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchTraceChainEntry) |
-| volumes_info | See [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchVolumeInformation*) |
-| file_references | See [src/structures/prefetch](https://github.com/noahrubin/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchFileReferences) |
+| trace_chains | See [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchTraceChainEntry) |
+| volumes_info | See [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchVolumeInformation*) |
+| file_references | See [src/structures/prefetch](https://github.com/analyzeDFIR/analyzePF/blob/master/src/structures/prefetch.py) (PrefetchFileReferences) |
 | directory_strings | List of lists of directory strings associated with volumes information array entries |
 
 ## DB Format
 
-See [src/database/models.py](https://github.com/noahrubin/analyzePF/blob/master/src/database/models.py).
+See [src/database/models.py](https://github.com/analyzeDFIR/analyzePF/blob/master/src/database/models.py).
 
 ## Contributing/Suggestions
 
