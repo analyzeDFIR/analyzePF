@@ -55,19 +55,3 @@ class PathInitializationError(BaseCustomException):
     directory to sys.path
     '''
     _MESSAGE = 'Unable to append lib directory to path (%(err)s)'
-
-class FieldBoundDictKeyError(BaseCustomException):
-    '''
-    Exception thrown when KeyError raised on DictItem object.
-    For example:
-        class ThisItem(BaseItem):
-            f1 = Field()
-            f2 = Field()
-            f3 = Field()
-
-        this_item = ThisItem()
-        print(this_item['f4'])
-    This will raise an error because instances of ThisItem do
-    not contain the key 'f4'
-    '''
-    _MESSAGE = '%(classname)s does not contain the field %(fieldname)s'

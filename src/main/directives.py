@@ -68,7 +68,6 @@ class BaseDirective(object, metaclass=DirectiveRegistry):
     be referenced outside of this module unless type checking
     a directive class.
     '''
-    MFT_RECORD_SIZE = 1024
 
     def __init__(self, args):
         self._args = args
