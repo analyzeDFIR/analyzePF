@@ -1,7 +1,6 @@
-## -*- coding: UTF-8 -*-
-## __init__.py
+## -*- coding: UTF-8 -*_
 ##
-## Copyright (c) 2018 analyzeDFIR
+## Copyright (c) 2018 Noah Rubin
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to deal

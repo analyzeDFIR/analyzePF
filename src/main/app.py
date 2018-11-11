@@ -21,7 +21,7 @@
 ## OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 
-from src.utils.config import initialize_paths
+from lib.adfir.config import initialize_paths
 initialize_paths()
 from src.main.cli import initialize_parser
 
@@ -37,5 +37,6 @@ def apf_main():
     '''
     parser = initialize_parser()
     args = parser.parse_args()
-    args.func(args)
+    directive = args.directive(args)
+    directive.run()
     return 0

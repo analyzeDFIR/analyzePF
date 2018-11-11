@@ -1,0 +1,3 @@
+[submodule "lib/adfir"]
+	path = lib/adfir
+	url = https://github.com/analyzeDFIR/libadfir.git
